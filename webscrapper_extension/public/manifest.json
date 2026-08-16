@@ -1,0 +1,39 @@
+{
+  "manifest_version": 3,
+  "name": "GoAgent - Sincronización de Pólizas",
+  "author": "Omar Acosta",
+  "version": "2.0",
+  "description": "Extensión para sincronizar datos de pólizas desde la plataforma de Seguros Monterrey hacia GoAgent",
+  "permissions": ["activeTab", "scripting", "tabs", "storage", "identity"],
+  "oauth2": {
+    "client_id": "87268387078-lqpg4pu31qdvr4hvk4jdib0828c6rgsk.apps.googleusercontent.com",
+    "scopes": ["openid", "email", "profile"]
+  },
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "GoAgent - Sincronización"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.lineamonterrey.com.mx/AsesoresWeb/Consultas/Polizas/Asesor/PolizasAgente.aspx",
+        "https://www.lineamonterrey.com.mx/AsesoresWeb/Consultas/Polizas/Asesor/DetallePoliza.aspx",
+        "https://www.lineamonterrey.com.mx/AsesoresWeb/Consultas/Recibos/Asesor/RecibosAg.aspx"
+      ],
+      "css": ["content.css"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["icons/*", "webicons/all.min.css"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  "host_permissions": ["https://www.lineamonterrey.com.mx/*"]
+}

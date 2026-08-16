@@ -1,0 +1,19 @@
+{
+  "name": "goagent-extension",
+  "version": "2.0.0",
+  "type": "module",
+  "description": "Extensión de Chrome para sincronizar pólizas desde Seguros Monterrey hacia GoAgent",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "node scripts/build.js --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/omaradriano/cobranzawebscrapper.git"
+  },
+  "author": "Omar Acosta",
+  "license": "ISC",
+  "devDependencies": {
+    "vite": "^8.2.1"
+  }
+}

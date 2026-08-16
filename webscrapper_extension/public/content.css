@@ -1,0 +1,47 @@
+.notification {
+  position: fixed;
+  right: 15px;
+  top: 15px;
+  border-radius: 5px;
+  font-family: "SN Pro", sans-serif;
+  font-size: 15px;
+  height: fit-content;
+  display: flex;
+  background-color: white;
+  color: black;
+  padding: 10px 30px 10px 10px;
+  flex-direction: row;
+  gap: 10px;
+  align-items: center;
+  box-shadow: 0 2px 5px 0px #c4c4c4;
+  border: 1px solid #80808040;
+  z-index: 99999;
+}
+
+.notification .content {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.notification .submessage {
+  color: rgb(142, 142, 142);
+  font-size: 14px;
+}
+
+.notification .extension__img {
+  height: 44px;
+}
+
+.notification .closeNotification {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  cursor: pointer;
+  height: 12px;
+}
+
+.notification .closeNotification > img {
+  height: 100%;
+  width: 100%;
+}

@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <title>GoAgent - Extensión</title>
+    <link rel="stylesheet" href="popup.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="../webicons/all.min.css" />
+  </head>
+  <body class="bodyContainer">
+    <div class="mainContainer">
+      <div class="extension__header">
+        <img
+          src="../icons/newyorklifepng.png"
+          alt="Logo de seguros monterrey"
+        />
+      </div>
+      <div class="extension__body">
+        <!-- Login -->
+        <section
+          data-tab="authentication__signin"
+          data-tab-active="false"
+          class="authentication"
+          style="display: none"
+        >
+          <div class="authentication__fields">
+            <div class="input">
+              <p>Correo</p>
+              <input type="text" data-login-field="email" />
+            </div>
+            <div class="input">
+              <p>Contraseña</p>
+              <input type="password" data-login-field="password" />
+            </div>
+          </div>
+          <span
+            style="display: none"
+            class="is_valid_field"
+            id="login_valid_credentials"
+          >
+            <p>Credenciales inválidas</p>
+          </span>
+          <button class="btn" id="btn_login">Iniciar sesión</button>
+          <p class="authentication__auth-mode" data-auth-mode="signup">
+            Aún no tienes cuenta? <span>Registrate</span>
+          </p>
+          <p class="authentication__auth-mode" data-auth-mode="forgot_password">
+            <span>Olvidé mi contraseña</span>
+          </p>
+          <div class="authentication__divider">
+            <span></span>
+            <p>o inicia sesión con</p>
+            <span></span>
+          </div>
+          <div class="authentication__auth-options">
+            <div class="auth__option" id="auth_google_login">
+              <i class="fa-brands fa-google"></i>
+            </div>
+          </div>
+        </section>
+
+        <!-- Empty view -->
+        <section
+          data-tab="empty_view"
+          data-tab-active="false"
+          class="empty_view"
+        ></section>
+
+        <!-- Management -->
+        <section
+          data-tab="management"
+          class="management"
+          data-tab-active="true"
+          style="display: none"
+        >
+          <div class="management__header">
+            <div class="management__user">
+              <h5 class="user__username" id="user__no_agente">
+                No. Asesor 000000
+              </h5>
+              <p class="user__email" id="user__email">Sin session</p>
+            </div>
+            <span class="user__logout btn" id="user__logout">
+              <i class="fa-solid fa-arrow-right-from-bracket"></i>
+            </span>
+          </div>
+          <h1>Mis polizas</h1>
+          <div class="management__tags">
+            <div class="tag">
+              <h5 class="tag__title">Total</h5>
+              <span class="tag__count" id="tag__total"></span>
+            </div>
+            <div class="tag">
+              <h5 class="tag__title">Activas</h5>
+              <span class="tag__count" id="total__activas"></span>
+            </div>
+            <div class="tag">
+              <h5 class="tag__title">Por vencer</h5>
+              <span class="tag__count" id="total__pago_proximo"></span>
+            </div>
+          </div>
+          <!-- Sync details: empty -->
+          <div
+            id="sync_details_empty"
+            data-submit-type="empty"
+            style="display: none"
+          ></div>
+          <!-- Sync details: all -->
+          <div
+            class="management_sync_details"
+            id="sync_details_all"
+            data-submit-type="all"
+            style="display: none"
+          >
+            <h3>Información en la vista actual</h3>
+            <div>
+              <p>Polizas en la vista: <span id="reg_total_count"></span></p>
+              <p>
+                Polizas en la vista no registradas:
+                <span id="reg_no_loaded_count">PENDIENTE</span>
+              </p>
+            </div>
+          </div>
+          <!-- Sync details: unique -->
+          <div
+            class="management_sync_details"
+            id="sync_details_unique"
+            data-submit-type="unique"
+            style="display: none"
+          >
+            <h3 class="management_sync_details__title">
+              Detalles de la poliza actual
+            </h3>
+            <div class="management_sync_details__container">
+              <div
+                class="management_sync_details__rows"
+                id="management_sync_details__rows"
+              >
+                <div class="management_sync_details__row">
+                  <p>
+                    Numero de poliza:
+                    <span id="management_sync_details_numpoliza"></span>
+                  </p>
+                </div>
+                <div class="management_sync_details__row">
+                  <p>
+                    Siguiente pago:
+                    <span id="management_sync_details_nextpayment"></span>
+                  </p>
+                </div>
+                <div class="management_sync_details__row">
+                  <p>
+                    Forma de pago:
+                    <span id="management_sync_details_period"></span>
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div
+            class="management_sync_details__no-data is_valid_field"
+            id="management_sync_details__no-data"
+            style="display: none"
+          >
+            No existen datos de la poliza en la vista actual. Se recomienda
+            sincronizar el registro.
+          </div>
+          <div class="extension__loadAllData">
+            <button
+              id="load_data_button"
+              class="btn btn__sync"
+              data-action-mode="unique"
+            >
+              Sincronizar registros
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <script type="module" src="popup.js"></script>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,62 @@
+'Cmd/Ctrl+Enter' // Triggers `Todo: Toggle Box`
+'Alt+Enter' // Triggers `Todo: Toggle Box`
+'Alt+D' // Triggers `Todo: Toggle Done`
+'Alt+C' // Triggers `Todo: Toggle Cancelled`
+'Alt+S' // Triggers `Todo: Toggle Start`
+'Cmd/Ctrl+Shift+A' // Triggers  `Todo: Archive`
+
+Ideas y comentarios para implementaciones futuras, mejora de flujo y notas: 
+  - Vista para el promotor para consultar todas las polizas de todos sus agentes
+  - El proyecto va orientado hacia el promotor para mantener control de sus asesores, verificar ventas y mantener el control de las polizas
+
+Tareas para PopUp window:
+  ✔ Crear ventana de autenticación @done(26-04-15 14:04)
+  ✔ Implementar sistema de autenticacion @done(26-04-17 09:30)
+  ✔ Re activar recuperacion de datos de cobranzas (scrapping) @started(26-04-23 08:46) @done(26-05-04 09:06) @lasted(1w4d20m20s)
+Rediseño de PopUp:
+  ✔ Conseguir iconos para uso en la ventana @done(26-04-15 14:04)
+Autenticacion:
+  ✔ Implementar autenticacion con google @done(26-04-17 09:32)
+  ✔ Terminar funcionamiento de registro con credenciales manuales @done(26-04-22 08:21)
+  ✔ Implementar inicio de sesion con credenciales manuales @done(26-04-22 12:01)
+  ✔ Funcionamiento para restablecer contraseña @done(26-04-23 08:46)
+  Seccion de correo de confirmacion de email:
+    ✔ Pantalla de aviso de envio de correo @done(26-04-22 12:02)
+    ✔ Pantalla de nueva contrasena al autenticar con google @started(26-04-17 13:33) @done(26-04-17 15:15) @lasted(1h42m11s)
+    ✔ Campo en base de datos para el token pendiente @done(26-04-17 15:15)
+    ✔ Campo de email confirmado en base de datos @done(26-04-17 15:15)
+    ✔ Terminar el guardado de la contraseña en el front @started(26-04-22 12:02) @done(26-04-22 12:02) @lasted(25s)
+    ✔ Envio de correo cuando la contraseña ha sido cambiada @done(26-04-28 09:21)
+  Implementacion de JWT:
+    ✔ Enviar token entre peticiones @done(26-04-30 08:32)
+    ☐ Investigar e implementar el refresh token
+    ✔ Eliminar JWT de la sesion para cerrarla @done(26-04-20 23:31)
+Configuracion de alertas:
+  ✔ Diseño de alerta @started(26-04-30 08:32) @done(26-04-30 08:32) @lasted(11s)
+  ✔ Configuracion de función con callback para el boton de aceptar @done(26-04-30 08:32)
+Scrapping:
+  ✔ Cambio en getPolizasList para recuperar unicamente los registros que no estan en base de datos @done(26-05-04 15:51)
+
+Pendientes para presentacion:
+  Alertas: 
+    ✔ Se han terminado de cargar todos los registros @done(26-05-18 15:33)
+    ✔ Se ha terminado de sincronizar un simple registro que ya existía @done(26-05-18 15:33)
+  Servidor:
+    ✔ Terminar de agregar autorization con middleware a las demas rutas @done(26-05-18 15:33)
+    ✔ Eliminar todos los endpoint con "cobranza" @done(26-05-18 15:33)
+  Web app:
+    ✔ Mostrar todos los registros @done(26-05-05 20:55)
+    ☐ Cambio de la fecha de pago (Con esto tener en cuenta que probablemente se necesite modificar la base de datos para recalcular)
+    Filtros:
+      ✔ Mostrar todo @done(26-05-05 20:54)
+      ✔ Mostrar los pagos realizados @done(26-05-05 20:54)
+      ✔ Mostrar los pagos pendientes @done(26-05-05 20:55)
+      ☐ Cobertura activa
+      ☐ Cobertura inactiva
+    Panel de administración:
+
+Potenciales implementaciones futuras:
+  ☐ Boton de recarga de información dentro de la misma extensión
+
+Nota de version 1.2:
+  ☐ Implementación de los puntos anteriores

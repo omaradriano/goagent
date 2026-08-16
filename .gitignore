@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-ssr/
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Go
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Server specific
+webscrapper_server/webscrapperdb.sql
+webscrapper_server/tasks.txt
+
+# Front specific
+*.local
+webscrapper_front/auxPage.txt
+webscrapper_front/tasks.todo
+
+# Extension
+webscrapper_extension/dist/
