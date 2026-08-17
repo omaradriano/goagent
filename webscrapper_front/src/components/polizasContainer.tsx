@@ -28,6 +28,13 @@ const PolizasContainer: React.FC<PolizasContainerProps> = ({
   // const { showAlert, setShowAlert, alertData, setAlertData } = useModalAlert(false);
 
   useEffect(() => {
+    if (isOpen && polizaData.num_poliza) {
+      const updated = data.find((p) => p.num_poliza === polizaData.num_poliza);
+      if (updated) setPolizaData(updated);
+    }
+  }, [data]);
+
+  useEffect(() => {
     const watcher = window.matchMedia("(max-width: 768px)");
     const listener = (e: MediaQueryListEvent) => setIsMobile(e.matches);
 
