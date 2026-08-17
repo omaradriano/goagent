@@ -348,6 +348,15 @@ func ApiPatchPoliza(w http.ResponseWriter, r *http.Request) {
 		fields["forma_pago"] = fp
 	}
 
+	if item.Estatus != nil {
+		est := *item.Estatus
+		if est != "En Vigor" && est != "Anulada" {
+			services.HandleResponseError(http.StatusBadRequest, "Estatus inválido (En Vigor, Anulada)", w)
+			return
+		}
+		fields["estatus"] = est
+	}
+
 	if len(fields) == 0 {
 		services.HandleResponseError(http.StatusBadRequest, "No se proporcionaron campos para actualizar", w)
 		return

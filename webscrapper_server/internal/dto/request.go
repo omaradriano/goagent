@@ -30,6 +30,7 @@ type PatchItem_Poliza struct {
 	DiaCobro  *int16  `json:"dia_cobro,omitempty"`
 	Telefono  *string `json:"telefono,omitempty"`
 	FormaPago *string `json:"forma_pago,omitempty"`
+	Estatus   *string `json:"estatus,omitempty"`
 }
 
 type CobranzaItemPayment struct {

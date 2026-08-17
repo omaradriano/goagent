@@ -92,12 +92,12 @@ const Modal: React.FC<ModalProps> = ({
     }
   };
 
-  // const toggleEstatus = () => {
-  //   setEditFields((prev) => ({
-  //     ...prev,
-  //     estatus: prev.estatus === "En Vigor" ? "Anulada" : "En Vigor",
-  //   }));
-  // };
+  const toggleEstatus = () => {
+    setEditFields((prev) => ({
+      ...prev,
+      estatus: prev.estatus === "En Vigor" ? "Anulada" : "En Vigor",
+    }));
+  };
 
   const handleGuardar = () => {
     alertContext?.setAlertOptions({
@@ -128,6 +128,9 @@ const Modal: React.FC<ModalProps> = ({
       }
       if (editFields.forma_pago !== polizaData.forma_pago) {
         body.forma_pago = editFields.forma_pago;
+      }
+      if (editFields.estatus !== polizaData.estatus) {
+        body.estatus = editFields.estatus;
       }
 
       const response = await fetch(
@@ -258,7 +261,7 @@ const Modal: React.FC<ModalProps> = ({
                       <MetaLabel>Estatus</MetaLabel>
                       <EstatusToggle
                         $active={editFields.estatus === "En Vigor"}
-                        // onClick={toggleEstatus}
+                        onClick={toggleEstatus}
                         type="button"
                       >
                         <EstatusIndicator
