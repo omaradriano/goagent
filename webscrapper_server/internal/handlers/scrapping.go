@@ -325,8 +325,22 @@ func ApiPatchPoliza(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if item.DiaCobro < 0 || item.DiaCobro > 31 {
-		services.HandleResponseError(http.StatusBadRequest, "Día de cobro inválido (debe ser entre 0 y 31)", w)
+	fields := make(map[string]interface{})
+
+	if item.DiaCobro != nil {
+		if *item.DiaCobro < 0 || *item.DiaCobro > 31 {
+			services.HandleResponseError(http.StatusBadRequest, "Día de cobro inválido (debe ser entre 0 y 31)", w)
+			return
+		}
+		fields["dia_cobro"] = *item.DiaCobro
+	}
+
+	if item.Telefono != nil {
+		fields["telefono"] = *item.Telefono
+	}
+
+	if len(fields) == 0 {
+		services.HandleResponseError(http.StatusBadRequest, "No se proporcionaron campos para actualizar", w)
 		return
 	}
 
@@ -337,9 +351,9 @@ func ApiPatchPoliza(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := deps.PolizaRepo.UpdateDiaCobro(r.Context(), item.NumPoliza, agenteID, item.DiaCobro); err != nil {
+	if err := deps.PolizaRepo.UpdatePolizaFields(r.Context(), item.NumPoliza, agenteID, fields); err != nil {
 		services.Log.ErrorMessage(err.Error())
-		services.HandleResponseError(http.StatusConflict, "Error actualizando día de cobro", w)
+		services.HandleResponseError(http.StatusConflict, "Error actualizando póliza", w)
 		return
 	}
 

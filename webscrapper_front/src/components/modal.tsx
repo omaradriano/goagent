@@ -25,6 +25,7 @@ interface EditableFields {
   forma_pago: FormaPago;
   dia_cobro: number;
   estatus: StatusValues;
+  telefono: string;
 }
 
 export interface ModalProps {
@@ -56,7 +57,7 @@ const Modal: React.FC<ModalProps> = ({
     forma_pago: (polizaData.forma_pago ?? "MENSUAL") as FormaPago,
     dia_cobro: polizaData.diaCobro ?? 0,
     estatus: polizaData.estatus ?? "En Vigor",
-    numpoliza: polizaData.num_poliza,
+    telefono: polizaData.telefono ?? "",
   });
 
   // Use a key to force remount and reset state when polizaData or modalOpen changes
@@ -75,7 +76,8 @@ const Modal: React.FC<ModalProps> = ({
   const hasChanges =
     editFields.forma_pago !== polizaData.forma_pago ||
     editFields.dia_cobro !== polizaData.diaCobro ||
-    editFields.estatus !== polizaData.estatus;
+    editFields.estatus !== polizaData.estatus ||
+    editFields.telefono !== (polizaData.telefono ?? "");
 
   const handleDiaCobroChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/\D/g, "");
@@ -100,14 +102,14 @@ const Modal: React.FC<ModalProps> = ({
   const handleGuardar = () => {
     alertContext?.setAlertOptions({
       title: "Confirmar cambios",
-      message: `Se actualizará el día de cobro a ${editFields.dia_cobro} para la póliza ${polizaData.num_poliza}. ¿Desea continuar?`,
+      message: `Se guardarán los cambios para la póliza ${polizaData.num_poliza}. ¿Desea continuar?`,
       type: "success",
-      onConfirm: saveDiaCobro,
+      onConfirm: saveChanges,
     });
     alertContext?.setShowAlert(true);
   };
 
-  const saveDiaCobro = async () => {
+  const saveChanges = async () => {
     const session_token = localStorage.getItem("session_jwt");
     if (!session_token) {
       auth?.setIsAuthenticated(false);
@@ -115,6 +117,16 @@ const Modal: React.FC<ModalProps> = ({
       return;
     }
     try {
+      const body: Record<string, unknown> = {
+        numpoliza: polizaData.num_poliza,
+      };
+      if (editFields.dia_cobro !== polizaData.diaCobro) {
+        body.dia_cobro = editFields.dia_cobro;
+      }
+      if (editFields.telefono !== (polizaData.telefono ?? "")) {
+        body.telefono = editFields.telefono;
+      }
+
       const response = await fetch(
         `${import.meta.env.VITE_API_SERVER_URL}/v1/scrapping/poliza`,
         {
@@ -123,10 +135,7 @@ const Modal: React.FC<ModalProps> = ({
             "Content-Type": "application/json",
             Authorization: `Bearer ${session_token}`,
           },
-          body: JSON.stringify({
-            numpoliza: polizaData.num_poliza,
-            dia_cobro: editFields.dia_cobro,
-          }),
+          body: JSON.stringify(body),
         },
       );
 
@@ -142,10 +151,9 @@ const Modal: React.FC<ModalProps> = ({
       }
 
       dataChanged?.setDataHasChanged((prev) => prev + 1);
-      setModalOpen(false);
       alertContext?.setAlertOptions({
         title: "Cambios guardados",
-        message: "El día de cobro ha sido actualizado correctamente",
+        message: "Los datos han sido actualizados correctamente",
         type: "success",
       });
       alertContext?.setShowAlert(true);
@@ -283,6 +291,21 @@ const Modal: React.FC<ModalProps> = ({
                     <Field>
                       <FieldLabel>Moneda</FieldLabel>
                       <FieldValue>{polizaData.moneda}</FieldValue>
+                    </Field>
+                    <Field>
+                      <FieldLabel>Teléfono</FieldLabel>
+                      <EditInput
+                        type="tel"
+                        value={editFields.telefono}
+                        placeholder="Sin teléfono"
+                        maxLength={15}
+                        onChange={(e) =>
+                          setEditFields((prev) => ({
+                            ...prev,
+                            telefono: e.target.value,
+                          }))
+                        }
+                      />
                     </Field>
                   </FieldGrid>
                 </SectionGroup>

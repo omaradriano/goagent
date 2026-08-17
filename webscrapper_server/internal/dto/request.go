@@ -26,8 +26,9 @@ type PostItems_Poliza struct {
 }
 
 type PatchItem_Poliza struct {
-	NumPoliza string `json:"numpoliza"`
-	DiaCobro  int16  `json:"dia_cobro"`
+	NumPoliza string  `json:"numpoliza"`
+	DiaCobro  *int16  `json:"dia_cobro,omitempty"`
+	Telefono  *string `json:"telefono,omitempty"`
 }
 
 type CobranzaItemPayment struct {
