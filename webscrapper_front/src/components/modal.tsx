@@ -126,6 +126,9 @@ const Modal: React.FC<ModalProps> = ({
       if (editFields.telefono !== (polizaData.telefono ?? "")) {
         body.telefono = editFields.telefono;
       }
+      if (editFields.forma_pago !== polizaData.forma_pago) {
+        body.forma_pago = editFields.forma_pago;
+      }
 
       const response = await fetch(
         `${import.meta.env.VITE_API_SERVER_URL}/v1/scrapping/poliza`,
@@ -237,7 +240,6 @@ const Modal: React.FC<ModalProps> = ({
                       <MetaLabel>Forma de pago</MetaLabel>
                       <EditSelect
                         value={editFields.forma_pago}
-                        disabled
                         onChange={(e) =>
                           setEditFields((prev) => ({
                             ...prev,

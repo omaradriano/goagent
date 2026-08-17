@@ -339,6 +339,15 @@ func ApiPatchPoliza(w http.ResponseWriter, r *http.Request) {
 		fields["telefono"] = *item.Telefono
 	}
 
+	if item.FormaPago != nil {
+		fp := *item.FormaPago
+		if fp != "MENSUAL" && fp != "TRIMESTRAL" && fp != "SEMESTRAL" && fp != "ANUAL" {
+			services.HandleResponseError(http.StatusBadRequest, "Forma de pago inválida (MENSUAL, TRIMESTRAL, SEMESTRAL, ANUAL)", w)
+			return
+		}
+		fields["forma_pago"] = fp
+	}
+
 	if len(fields) == 0 {
 		services.HandleResponseError(http.StatusBadRequest, "No se proporcionaron campos para actualizar", w)
 		return
