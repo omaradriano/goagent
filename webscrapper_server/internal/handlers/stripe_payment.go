@@ -126,6 +126,12 @@ func StripeWebhookHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		if aid, aErr := deps.AgenteRepo.FindIDByUUID(ctx, agenteUUID); aErr == nil {
+			oldVal := "false"
+			newVal := "true"
+			_ = deps.AuditRepo.LogAgenteChange(ctx, aid, "is_subscribed", &oldVal, &newVal, nil, "webhook")
+		}
+
 		if subscriptionID != "" {
 			sub, subErr := stripesubscription.Get(subscriptionID, nil)
 			if subErr != nil {
@@ -216,6 +222,14 @@ func StripeWebhookHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		var failedAgenteID int
+		deps.DB.Raw("SELECT agente_id FROM agentes WHERE stripe_subscription_id = ?", invoice.Subscription.ID).Scan(&failedAgenteID)
+		if failedAgenteID > 0 {
+			oldVal := "true"
+			newVal := "false"
+			_ = deps.AuditRepo.LogAgenteChange(ctx, failedAgenteID, "is_subscribed", &oldVal, &newVal, nil, "webhook")
+		}
+
 	case "customer.subscription.deleted":
 		subBytes, err := json.Marshal(event.Data.Object)
 		if err != nil {
@@ -229,6 +243,9 @@ func StripeWebhookHandler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		var deletedAgenteID int
+		deps.DB.Raw("SELECT agente_id FROM agentes WHERE stripe_subscription_id = ?", sub.ID).Scan(&deletedAgenteID)
+
 		if err = deps.AgenteRepo.UpdateSubscription(ctx, map[string]any{
 			"is_subscribed":          false,
 			"cancel_at_period_end":   false,
@@ -238,6 +255,12 @@ func StripeWebhookHandler(w http.ResponseWriter, r *http.Request) {
 			services.Log.ErrorMessage("Error desactivando suscripción eliminada " + sub.ID + ": " + err.Error())
 			services.HandleResponseError(http.StatusInternalServerError, "Error interno actualizando DB", w)
 			return
+		}
+
+		if deletedAgenteID > 0 {
+			oldVal := "true"
+			newVal := "false"
+			_ = deps.AuditRepo.LogAgenteChange(ctx, deletedAgenteID, "is_subscribed", &oldVal, &newVal, nil, "webhook")
 		}
 	}
 
@@ -295,6 +318,12 @@ func ApiCancelSubscription(w http.ResponseWriter, r *http.Request) {
 		services.Log.ErrorMessage("Error actualizando cancelación en DB " + subscriptionID + ": " + err.Error())
 		services.HandleResponseError(http.StatusInternalServerError, "Error interno actualizando DB", w)
 		return
+	}
+
+	if aid, aErr := deps.AgenteRepo.FindIDByUUID(r.Context(), agente_uuid); aErr == nil {
+		oldVal := "false"
+		newVal := "true"
+		_ = deps.AuditRepo.LogAgenteChange(r.Context(), aid, "cancel_at_period_end", &oldVal, &newVal, &aid, "api")
 	}
 
 	services.HandleResponseSuccessWithData(map[string]any{

@@ -40,6 +40,7 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
 
   const isAuthenticated = auth?.session != null;
   const isSubscribed = subscription?.isSubscribed ?? false;
+  const isAdmin = auth?.session?.agente_role === "admin";
 
   // Cerrar menús al hacer click fuera
   useEffect(() => {
@@ -129,6 +130,7 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
           <>
             <CustomNavLink to="/dashboard">Dashboard</CustomNavLink>
             <CustomNavLink to="/calendar">Calendario</CustomNavLink>
+            {isAdmin && <CustomNavLink to="/admin">Admin Panel</CustomNavLink>}
 
             <Divider />
 
@@ -244,6 +246,12 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
                   <Icon iconName="CalendarMonth" size={18} />
                   <span>Calendario</span>
                 </DrawerLink>
+                {isAdmin && (
+                  <DrawerLink to="/admin" onClick={() => setMenuOpen(false)}>
+                    <Icon iconName="AdminPanelSettings" size={18} />
+                    <span>Admin Panel</span>
+                  </DrawerLink>
+                )}
 
                 <DrawerDivider />
 

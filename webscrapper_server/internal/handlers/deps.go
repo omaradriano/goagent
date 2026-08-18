@@ -11,6 +11,7 @@ type Deps struct {
 	PolizaRepo    repository.PolizaRepository
 	AseguradoRepo repository.AseguradoRepository
 	PaymentRepo   repository.PaymentRepository
+	AuditRepo     repository.AuditRepository
 }
 
 var deps *Deps
@@ -22,5 +23,6 @@ func InitDeps(gormDB *gorm.DB) {
 		PolizaRepo:    repository.NewPolizaRepository(gormDB),
 		AseguradoRepo: repository.NewAseguradoRepository(gormDB),
 		PaymentRepo:   repository.NewPaymentRepository(gormDB),
+		AuditRepo:     repository.NewAuditRepository(gormDB),
 	}
 }

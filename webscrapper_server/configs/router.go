@@ -46,6 +46,14 @@ func NewRouter() http.Handler {
 			// Poliza update
 			r.Patch("/scrapping/poliza", handlers.ApiPatchPoliza)
 
+			// Audit
+			r.Get("/audit/poliza/{polizaUUID}", handlers.ApiGetPolizaAudit)
+			r.Get("/audit/agente", handlers.ApiGetAgenteAudit)
+
+			// Admin audit (role check inside handler)
+			r.Get("/audit/all/polizas", handlers.ApiGetAllPolizaAudit)
+			r.Get("/audit/all/agentes", handlers.ApiGetAllAgenteAudit)
+
 			// Payments
 			r.Patch("/payments/poliza", handlers.ApiSetPayment)
 

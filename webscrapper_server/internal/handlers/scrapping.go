@@ -369,7 +369,7 @@ func ApiPatchPoliza(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := deps.PolizaRepo.UpdatePolizaFields(r.Context(), item.NumPoliza, agenteID, fields); err != nil {
+	if err := deps.PolizaRepo.UpdatePolizaFields(r.Context(), item.NumPoliza, agenteID, fields, deps.AuditRepo); err != nil {
 		services.Log.ErrorMessage(err.Error())
 		services.HandleResponseError(http.StatusConflict, "Error actualizando póliza", w)
 		return

@@ -270,6 +270,19 @@ func ApiSetCredentials(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	_ = deps.AuditRepo.LogAgenteEvent(r.Context(), agente.AgenteID, "password_changed", &agente.AgenteID, "api")
+	if noAgente != nil {
+		old := agente.NoAgente
+		_ = deps.AuditRepo.LogAgenteChange(r.Context(), agente.AgenteID, "no_agente", &old, noAgente, &agente.AgenteID, "api")
+	}
+	if aseguradoraID != nil {
+		oldAseg := ""
+		if agente.AseguradoraID != nil {
+			oldAseg = strconv.FormatInt(*agente.AseguradoraID, 10)
+		}
+		_ = deps.AuditRepo.LogAgenteChange(r.Context(), agente.AgenteID, "aseguradora_id", &oldAseg, aseguradoraID, &agente.AgenteID, "api")
+	}
+
 	services.SendCustomMail(email, "Tu constraseña ha sido actualizada")
 	services.HandleResponseSuccess(w)
 }
@@ -360,6 +373,10 @@ func ApiResetPasswordMail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if agente, findErr := deps.AgenteRepo.FindByEmail(r.Context(), resetPassCredentials.Email); findErr == nil {
+		_ = deps.AuditRepo.LogAgenteEvent(r.Context(), agente.AgenteID, "password_reset_requested", nil, "api")
+	}
+
 	err = services.SendMail(resetPassCredentials.Email, verificationToken, "ResetPassword")
 	if err != nil {
 		services.HandleResponseError(http.StatusInternalServerError, "No se ha podido enviar el correo de restablecimiento", w)
@@ -407,6 +424,10 @@ func ApiVerifyAccount(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		services.HandleResponseError(http.StatusInternalServerError, "No se ha podido verificar la cuenta debido a un error interno", w)
 		return
+	}
+
+	if agenteID, idErr := deps.AgenteRepo.FindIDByUUID(r.Context(), userUUID); idErr == nil {
+		_ = deps.AuditRepo.LogAgenteEvent(r.Context(), agenteID, "account_verified", &agenteID, "api")
 	}
 
 	redirectUrl := fmt.Sprintf(`http://%s/auth/verifiedaccount?status=success`, env.Envs.WebAppURL)
