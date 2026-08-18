@@ -395,7 +395,11 @@ func ApiGetDetails(w http.ResponseWriter, r *http.Request) {
 		FROM polizas p
 		JOIN agentes a ON p.agente_id = a.agente_id
 		JOIN polizas_payments_conf ppc ON p.poliza_id = ppc.poliza_id
-		LEFT JOIN polizas_payments_log ppl ON p.poliza_id = ppl.poliza_id
+		LEFT JOIN (
+				SELECT DISTINCT ON (poliza_id) poliza_id, paid_period
+				FROM polizas_payments_log
+				ORDER BY poliza_id, payment_log_id DESC
+			) ppl ON ppl.poliza_id = p.poliza_id
 		WHERE a.agente_uuid = ?`, userUUID).
 		Scan(&details).Error
 	if err != nil {
