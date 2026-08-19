@@ -253,9 +253,7 @@ async function toggleViewDetails(submitType) {
       break;
 
     case "unique":
-      elements.syncBtn.innerText = "Sincronizar registro";
-      elements.syncBtn.setAttribute("data-action-mode", "unique");
-      elements.syncBtn.removeAttribute("disabled");
+      elements.syncBtn.style.display = "none";
 
       try {
         const captureRes = await chrome.tabs.sendMessage(currentTabId, {
