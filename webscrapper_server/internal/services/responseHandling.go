@@ -68,7 +68,7 @@ func HandleResponseSuccess(w http.ResponseWriter) {
 func GenerateJWT(user_uuid, email, no_agente, role, aseguradora, aseguradora_id string) (string, error) {
 	claims := jwt.MapClaims{
 		"uuid":           user_uuid,
-		"exp":            time.Now().Add(time.Hour * 24).Unix(),
+		"exp":            time.Now().Add(time.Hour * 24 * 30).Unix(),
 		"email":          email,
 		"role":           role,
 		"no_agente":      no_agente,
