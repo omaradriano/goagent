@@ -42,6 +42,7 @@ type PolizaRepository interface {
 	GetPolizasPaginated(ctx context.Context, filters PolizaFilters) ([]map[string]any, int64, error)
 	GetBirthdates(ctx context.Context, agenteID int) ([]BirthdateResult, error)
 	UpdatePolizaFields(ctx context.Context, numPoliza string, agenteID int, fields map[string]interface{}, auditRepo AuditRepository) error
+	UpdatePolizaFieldsByID(ctx context.Context, polizaID int, fields map[string]interface{}, changedBy int, auditRepo AuditRepository) error
 }
 
 type polizaRepository struct {
@@ -255,6 +256,49 @@ func (r *polizaRepository) UpdatePolizaFields(ctx context.Context, numPoliza str
 
 	if auditRepo != nil {
 		_ = auditRepo.LogPolizaChanges(ctx, poliza.PolizaID, oldFields, newFields, agenteID, "api")
+	}
+
+	return nil
+}
+
+func (r *polizaRepository) UpdatePolizaFieldsByID(ctx context.Context, polizaID int, fields map[string]interface{}, changedBy int, auditRepo AuditRepository) error {
+	var poliza models.Poliza
+	if err := r.db.WithContext(ctx).
+		Select("poliza_id, dia_cobro, forma_pago, estatus, telefono").
+		Where("poliza_id = ?", polizaID).
+		First(&poliza).Error; err != nil {
+		return err
+	}
+
+	oldFields := map[string]string{
+		"dia_cobro":  fmt.Sprintf("%d", poliza.DiaCobro),
+		"forma_pago": poliza.FormaPago,
+		"estatus":    poliza.Estatus,
+	}
+	if poliza.Telefono != nil {
+		oldFields["telefono"] = *poliza.Telefono
+	} else {
+		oldFields["telefono"] = ""
+	}
+
+	result := r.db.WithContext(ctx).
+		Model(&models.Poliza{}).
+		Where("poliza_id = ?", polizaID).
+		Updates(fields)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	newFields := make(map[string]string, len(fields))
+	for k, v := range fields {
+		newFields[k] = fmt.Sprintf("%v", v)
+	}
+
+	if auditRepo != nil {
+		_ = auditRepo.LogPolizaChanges(ctx, poliza.PolizaID, oldFields, newFields, changedBy, "revert")
 	}
 
 	return nil

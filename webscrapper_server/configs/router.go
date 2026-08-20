@@ -53,6 +53,7 @@ func NewRouter() http.Handler {
 			// Admin audit (role check inside handler)
 			r.Get("/audit/all/polizas", handlers.ApiGetAllPolizaAudit)
 			r.Get("/audit/all/agentes", handlers.ApiGetAllAgenteAudit)
+			r.Post("/audit/revert/poliza/{auditID}", handlers.ApiRevertPolizaAudit)
 
 			// Payments
 			r.Patch("/payments/poliza", handlers.ApiSetPayment)

@@ -9,6 +9,7 @@ import (
 )
 
 type PolizaAuditEntry struct {
+	AuditID     int     `gorm:"column:audit_id" json:"audit_id"`
 	FieldName   string  `gorm:"column:field_name" json:"field_name"`
 	OldValue    *string `gorm:"column:old_value" json:"old_value"`
 	NewValue    *string `gorm:"column:new_value" json:"new_value"`
@@ -36,6 +37,7 @@ type AuditRepository interface {
 	LogAgenteEvent(ctx context.Context, agenteID int, eventName string, changedBy *int, source string) error
 	GetAllPolizaAudit(ctx context.Context, limit, offset int) ([]PolizaAuditEntry, error)
 	GetAllAgenteAudit(ctx context.Context, limit, offset int) ([]AgenteAuditEntry, error)
+	GetPolizaAuditByID(ctx context.Context, auditID int) (*models.PolizaAuditLog, error)
 }
 
 type auditRepository struct {
@@ -114,7 +116,7 @@ func (r *auditRepository) GetAgenteAudit(ctx context.Context, agenteID int, limi
 func (r *auditRepository) GetAllPolizaAudit(ctx context.Context, limit, offset int) ([]PolizaAuditEntry, error) {
 	var entries []PolizaAuditEntry
 	err := r.db.WithContext(ctx).Raw(`
-		SELECT pal.field_name, pal.old_value, pal.new_value,
+		SELECT pal.audit_id, pal.field_name, pal.old_value, pal.new_value,
 			pal.changed_at, pal.source,
 			p.numpoliza,
 			COALESCE(a.email, '') as agente_email
@@ -124,6 +126,15 @@ func (r *auditRepository) GetAllPolizaAudit(ctx context.Context, limit, offset i
 		ORDER BY pal.changed_at DESC
 		LIMIT ? OFFSET ?`, limit, offset).Scan(&entries).Error
 	return entries, err
+}
+
+func (r *auditRepository) GetPolizaAuditByID(ctx context.Context, auditID int) (*models.PolizaAuditLog, error) {
+	var entry models.PolizaAuditLog
+	err := r.db.WithContext(ctx).Where("audit_id = ?", auditID).First(&entry).Error
+	if err != nil {
+		return nil, err
+	}
+	return &entry, nil
 }
 
 func (r *auditRepository) GetAllAgenteAudit(ctx context.Context, limit, offset int) ([]AgenteAuditEntry, error) {
