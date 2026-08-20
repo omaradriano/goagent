@@ -141,6 +141,7 @@ func CORSMiddleware(next http.Handler) http.Handler {
 		origin := r.Header.Get("Origin")
 
 		if origin == "http://localhost:5173" ||
+			origin == "http://localhost:5174" ||
 			origin == "https://www.goagent.com.mx" ||
 			origin == "https://goagent.com.mx" ||
 			origin == "chrome-extension://bnhggcmlbinhmheijhmlfjoefgldkpdp" ||
