@@ -75,7 +75,16 @@ const CounterCard: React.FC<SpanCardProps> = ({
 
   const handleToggle = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isSubscribed) return;
+    if (!isSubscribed) {
+      alertContext?.setAlertOptions({
+        title: "Suscripción requerida",
+        message: "Necesitas una suscripción activa para registrar pagos.",
+        type: "error",
+        onConfirm: () => alertContext.setShowAlert(false),
+      });
+      alertContext?.setShowAlert(true);
+      return;
+    }
     if (!showOptions && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       setDropdownPos({

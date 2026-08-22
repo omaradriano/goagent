@@ -16,7 +16,7 @@ import {
   calculateDaysUntilLimit,
   formatDate,
 } from "../functions/globalFunctions";
-import { AlertContext, AuthContext, DataChangedContext } from "../Context/ContextConfig";
+import { AlertContext, AuthContext, DataChangedContext, SubscriptionContext } from "../Context/ContextConfig";
 import { useNavigate } from "react-router";
 
 type FormaPago = "MENSUAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL";
@@ -66,6 +66,8 @@ const Modal: React.FC<ModalProps> = ({
   const auth = useContext(AuthContext);
   const alertContext = useContext(AlertContext);
   const dataChanged = useContext(DataChangedContext);
+  const subscription = useContext(SubscriptionContext);
+  const isSubscribed = subscription?.isSubscribed ?? false;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -78,6 +80,16 @@ const Modal: React.FC<ModalProps> = ({
     editFields.dia_cobro !== polizaData.diaCobro ||
     editFields.estatus !== polizaData.estatus ||
     editFields.telefono !== (polizaData.telefono ?? "");
+
+  const showSubscriptionAlert = () => {
+    alertContext?.setAlertOptions({
+      title: "Suscripción requerida",
+      message: "Necesitas una suscripción activa para modificar pólizas.",
+      type: "error",
+      onConfirm: () => alertContext.setShowAlert(false),
+    });
+    alertContext?.setShowAlert(true);
+  };
 
   const handleDiaCobroChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const raw = e.target.value.replace(/\D/g, "");
@@ -235,7 +247,9 @@ const Modal: React.FC<ModalProps> = ({
                             : editFields.dia_cobro,
                         )}
                         placeholder="0"
-                        onChange={handleDiaCobroChange}
+                        readOnly={!isSubscribed}
+                        onChange={isSubscribed ? handleDiaCobroChange : undefined}
+                        onFocus={!isSubscribed ? showSubscriptionAlert : undefined}
                         onBlur={handleDiaCobroBlur}
                       />
                     </MetaItem>
@@ -243,12 +257,14 @@ const Modal: React.FC<ModalProps> = ({
                       <MetaLabel>Forma de pago</MetaLabel>
                       <EditSelect
                         value={editFields.forma_pago}
-                        onChange={(e) =>
+                        disabled={!isSubscribed}
+                        onChange={isSubscribed ? (e) =>
                           setEditFields((prev) => ({
                             ...prev,
                             forma_pago: e.target.value as FormaPago,
-                          }))
+                          })) : undefined
                         }
+                        onFocus={!isSubscribed ? showSubscriptionAlert : undefined}
                       >
                         {FORMAS_PAGO.map((fp) => (
                           <option key={fp} value={fp}>
@@ -261,7 +277,7 @@ const Modal: React.FC<ModalProps> = ({
                       <MetaLabel>Estatus</MetaLabel>
                       <EstatusToggle
                         $active={editFields.estatus === "En Vigor"}
-                        onClick={toggleEstatus}
+                        onClick={isSubscribed ? toggleEstatus : showSubscriptionAlert}
                         type="button"
                       >
                         <EstatusIndicator
@@ -304,12 +320,14 @@ const Modal: React.FC<ModalProps> = ({
                         value={editFields.telefono}
                         placeholder="Sin teléfono"
                         maxLength={15}
-                        onChange={(e) =>
+                        readOnly={!isSubscribed}
+                        onChange={isSubscribed ? (e) =>
                           setEditFields((prev) => ({
                             ...prev,
                             telefono: e.target.value,
-                          }))
+                          })) : undefined
                         }
+                        onFocus={!isSubscribed ? showSubscriptionAlert : undefined}
                       />
                     </Field>
                   </FieldGrid>
@@ -374,7 +392,7 @@ const Modal: React.FC<ModalProps> = ({
 
               {/* FOOTER */}
               <ModalFooter>
-                {hasChanges && (
+                {hasChanges && isSubscribed && (
                   <Button
                     action={handleGuardar}
                     label="Guardar cambios"
