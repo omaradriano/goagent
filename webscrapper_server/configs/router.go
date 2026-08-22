@@ -72,8 +72,6 @@ func NewRouter() http.Handler {
 			// Pagos
 			r.Patch("/payments/poliza", handlers.ApiSetPayment)
 
-			// Revertir auditoría
-			r.Post("/audit/revert/poliza/{auditID}", handlers.ApiRevertPolizaAudit)
 		})
 	})
 
