@@ -21,7 +21,7 @@ const PageWrapper = styled.div`
   font-family: "SN Pro", sans-serif;
   overflow-x: hidden;
   overflow-y: auto;
-  scroll-snap-type: y mandatory;
+  scroll-snap-type: y proximity;
   scroll-behavior: smooth;
 `;
 
