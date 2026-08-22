@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import styled, { keyframes } from "styled-components";
 import { NavLink } from "react-router";
 
@@ -8,24 +8,63 @@ const fadeUp = keyframes`
   to   { opacity: 1; transform: translateY(0); }
 `;
 
+const bounce = keyframes`
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50% { transform: translateX(-50%) translateY(10px); }
+`;
+
 // ── Root wrapper ─────────────────────────────────────────────────────────────
 const PageWrapper = styled.div`
-  min-height: 100vh;
+  height: calc(100vh - 60px);
   background-color: #f2ede7;
   color: #1a1a1a;
   font-family: "SN Pro", sans-serif;
   overflow-x: hidden;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+`;
+
+const SnapSection = styled.section`
+  min-height: calc(100vh - 60px);
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+`;
+
+const ScrollArrow = styled.div<{ $visible: boolean }>`
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  animation: ${bounce} 1.5s ease-in-out infinite;
+  opacity: ${(p) => (p.$visible ? 0.6 : 0)};
+  transition: opacity 0.4s;
+  pointer-events: none;
+  z-index: 10;
+
+  &::before {
+    content: "";
+    display: block;
+    width: 20px;
+    height: 20px;
+    border-right: 2.5px solid #1a1a1a;
+    border-bottom: 2.5px solid #1a1a1a;
+    transform: rotate(45deg);
+  }
 `;
 
 // ── HERO ─────────────────────────────────────────────────────────────────────
-const HeroSection = styled.section`
+const HeroSection = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 6rem 1.5rem 4rem;
+  padding: 2rem 1.5rem;
   animation: ${fadeUp} 0.8s ease both;
+  flex: 1;
 `;
 
 const Eyebrow = styled.span`
@@ -174,10 +213,14 @@ const StatLabel = styled.p`
 `;
 
 // ── FEATURES ─────────────────────────────────────────────────────────────────
-const FeaturesSection = styled.section`
+const FeaturesSection = styled.div`
   max-width: 1100px;
   margin: 0 auto;
   padding: 4rem 1.5rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 `;
 
 const SectionHeader = styled.div`
@@ -274,15 +317,19 @@ const FeatureDesc = styled.p`
 `;
 
 // ── HOW IT WORKS ─────────────────────────────────────────────────────────────
-const HowSection = styled.section`
+const HowSection = styled.div`
   background: #1a1a1a;
   color: #f2ede7;
   padding: 5rem 1.5rem;
+  flex: 1;
+  display: flex;
+  align-items: center;
 `;
 
 const HowInner = styled.div`
   max-width: 1100px;
   margin: 0 auto;
+  width: 100%;
 `;
 
 const HowTitle = styled.h2`
@@ -542,113 +589,100 @@ const steps = [
 
 // ── COMPONENT ─────────────────────────────────────────────────────────────────
 const Home: React.FC = () => {
-  return (
-    <PageWrapper>
-      {/* HERO */}
-      <HeroSection>
-        <Eyebrow>Nuevo · Plataforma disponible</Eyebrow>
-        <HeroTitle>Nada como GoAgent</HeroTitle>
-        <HeroSubtitle>
-          Con nuestra plataforma puedes llevar un control de todas tus polizas y
-          pagos pendientes sin tener que preocuparte de comenzar de cero.
-        </HeroSubtitle>
-        <HeroCTAGroup>
-          <PrimaryButton to="/auth/register">Registrate gratis</PrimaryButton>
-          <SecondaryButton to="/auth/signin">Iniciar sesión</SecondaryButton>
-        </HeroCTAGroup>
-      </HeroSection>
+  const [showArrow, setShowArrow] = useState(true);
+  const wrapperRef = React.useRef<HTMLDivElement>(null);
 
-      {/* STATS */}
-      {/* <StatsBar>
-        <StatItem>
-          <StatNumber>+1.000</StatNumber>
-          <StatLabel>Métrica clave A</StatLabel>
-        </StatItem>
-        <StatItem>
-          <StatNumber>98%</StatNumber>
-          <StatLabel>Métrica clave B</StatLabel>
-        </StatItem>
-        <StatItem>
-          <StatNumber>24/7</StatNumber>
-          <StatLabel>Métrica clave C</StatLabel>
-        </StatItem>
-        <StatItem>
-          <StatNumber>+500</StatNumber>
-          <StatLabel>Métrica clave D</StatLabel>
-        </StatItem>
-      </StatsBar> */}
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el) return;
+    const onScroll = () => {
+      const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 100;
+      setShowArrow(!atBottom);
+    };
+    el.addEventListener("scroll", onScroll, { passive: true });
+    return () => el.removeEventListener("scroll", onScroll);
+  }, []);
+
+  return (
+    <PageWrapper ref={wrapperRef}>
+      <ScrollArrow $visible={showArrow} />
+
+      {/* HERO */}
+      <SnapSection>
+        <HeroSection>
+          <Eyebrow>Nuevo · Plataforma disponible</Eyebrow>
+          <HeroTitle>Nada como GoAgent</HeroTitle>
+          <HeroSubtitle>
+            Con nuestra plataforma puedes llevar un control de todas tus polizas y
+            pagos pendientes sin tener que preocuparte de comenzar de cero.
+          </HeroSubtitle>
+          <HeroCTAGroup>
+            <PrimaryButton to="/auth/register">Registrate gratis</PrimaryButton>
+            <SecondaryButton to="/auth/signin">Iniciar sesión</SecondaryButton>
+          </HeroCTAGroup>
+        </HeroSection>
+      </SnapSection>
 
       {/* FEATURES */}
-      <FeaturesSection>
-        <SectionHeader>
-          <SectionTitle>¿Qué incluye la plataforma?</SectionTitle>
-          <SectionLink to="/auth/register">Ver todas las funciones</SectionLink>
-        </SectionHeader>
-        <FeaturesGrid>
-          {features.map((f) => (
-            <FeatureCard key={f.name}>
-              <FeatureIcon $bg={f.bg}>{f.icon}</FeatureIcon>
-              <FeatureName>{f.name}</FeatureName>
-              <FeatureDesc>{f.desc}</FeatureDesc>
-            </FeatureCard>
-          ))}
-        </FeaturesGrid>
-      </FeaturesSection>
+      <SnapSection>
+        <FeaturesSection>
+          <SectionHeader>
+            <SectionTitle>¿Qué incluye la plataforma?</SectionTitle>
+            <SectionLink to="/auth/register">Ver todas las funciones</SectionLink>
+          </SectionHeader>
+          <FeaturesGrid>
+            {features.map((f) => (
+              <FeatureCard key={f.name}>
+                <FeatureIcon $bg={f.bg}>{f.icon}</FeatureIcon>
+                <FeatureName>{f.name}</FeatureName>
+                <FeatureDesc>{f.desc}</FeatureDesc>
+              </FeatureCard>
+            ))}
+          </FeaturesGrid>
+        </FeaturesSection>
+      </SnapSection>
 
       {/* HOW IT WORKS */}
-      <HowSection>
-        <HowInner>
-          <HowTitle>¿Cómo funciona?</HowTitle>
-          <StepsGrid>
-            {steps.map((s) => (
-              <Step key={s.num}>
-                <StepNumber>{s.num}</StepNumber>
-                <StepDivider />
-                <StepTitle>{s.title}</StepTitle>
-                <StepDesc>{s.desc}</StepDesc>
-              </Step>
-            ))}
-          </StepsGrid>
-        </HowInner>
-      </HowSection>
+      <SnapSection style={{ background: "#1a1a1a" }}>
+        <HowSection>
+          <HowInner>
+            <HowTitle>¿Cómo funciona?</HowTitle>
+            <StepsGrid>
+              {steps.map((s) => (
+                <Step key={s.num}>
+                  <StepNumber>{s.num}</StepNumber>
+                  <StepDivider />
+                  <StepTitle>{s.title}</StepTitle>
+                  <StepDesc>{s.desc}</StepDesc>
+                </Step>
+              ))}
+            </StepsGrid>
+          </HowInner>
+        </HowSection>
+      </SnapSection>
 
-      {/* TESTIMONIAL */}
-      <QuoteSection>
-        {/* <QuoteText>
-          &ldquo;Esta plataforma transformó completamente la manera en que gestionamos
-          nuestro trabajo. Resultados increíbles desde el primer día.&rdquo;
-        </QuoteText>
-        <QuoteAuthor>
-          <Avatar />
-          <AuthorInfo>
-            <AuthorName>Nombre del cliente</AuthorName>
-            <AuthorRole>Cargo · Empresa</AuthorRole>
-          </AuthorInfo>
-        </QuoteAuthor> */}
-      </QuoteSection>
-
-      {/* CTA BANNER */}
-      <CTASection>
-        <CTATitle>¿Listo para empezar?</CTATitle>
-        <CTASubtitle>
-          Únete hoy y descubre todo lo que la plataforma tiene para ofrecer. Sin
-          tarjeta de crédito requerida.
-        </CTASubtitle>
-        <CTAButton to="/auth/register">Crear cuenta gratuita</CTAButton>
-      </CTASection>
-
-      {/* FOOTER */}
-      <Footer>
-        <FooterBrand>Tu Marca</FooterBrand>
-        <FooterLinks>
-          <FooterLink to="/privacy">Privacidad</FooterLink>
-          <FooterLink to="/auth/signin">Iniciar sesión</FooterLink>
-          <FooterLink to="/auth/register">Registro</FooterLink>
-        </FooterLinks>
-        <FooterCopy>
-          © 2026 Tu Empresa. Todos los derechos reservados.
-        </FooterCopy>
-      </Footer>
+      {/* CTA + FOOTER */}
+      <SnapSection>
+        <CTASection>
+          <CTATitle>¿Listo para empezar?</CTATitle>
+          <CTASubtitle>
+            Únete hoy y descubre todo lo que la plataforma tiene para ofrecer. Sin
+            tarjeta de crédito requerida.
+          </CTASubtitle>
+          <CTAButton to="/auth/register">Crear cuenta gratuita</CTAButton>
+        </CTASection>
+        <Footer>
+          <FooterBrand>GoAgent</FooterBrand>
+          <FooterLinks>
+            <FooterLink to="/privacy">Privacidad</FooterLink>
+            <FooterLink to="/auth/signin">Iniciar sesión</FooterLink>
+            <FooterLink to="/auth/register">Registro</FooterLink>
+          </FooterLinks>
+          <FooterCopy>
+            © 2026 GoAgent. Todos los derechos reservados.
+          </FooterCopy>
+        </Footer>
+      </SnapSection>
     </PageWrapper>
   );
 };
