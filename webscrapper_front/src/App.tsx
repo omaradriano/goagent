@@ -6,7 +6,7 @@ import Dashboard from "./components/dashboard";
 import { useContext, useEffect } from "react";
 import { ThemeContext, SubscriptionContext, AuthContext, type PreferedScheme } from "./Context/ContextConfig";
 import AuthView from "./components/authview";
-import { Route, Routes, useNavigate } from "react-router";
+import { Navigate, Route, Routes, useNavigate } from "react-router";
 import Home from "./components/home";
 import Calendar from "./components/calendar/Calendar";
 import PrivacyPolicy from "./components/PrivacyPolicy";
@@ -24,6 +24,7 @@ function App() {
       <Header />
       {/* <Route path="Auth" element={<AuthView mode="SignIn" />}></Route> */}
       <Routes>
+        <Route path="/" element={<Navigate to="/home" replace />} />
         <Route path="home" element={<Home/>}></Route>
         <Route path="auth/register" element={<AuthView mode="SignUp" />}></Route>
         <Route path="auth/signin" element={<AuthView mode="SignIn" />}></Route>
