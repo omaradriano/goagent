@@ -40,7 +40,6 @@ const AdminPanel: React.FC = () => {
   const [polizaOffset, setPolizaOffset] = useState(0);
   const [agenteOffset, setAgenteOffset] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [revertingId, setRevertingId] = useState<number | null>(null);
 
   const LIMIT = 20;
 
@@ -82,30 +81,6 @@ const AdminPanel: React.FC = () => {
     }
     load();
   }, [polizaOffset, agenteOffset]);
-
-  async function handleRevert(auditId: number) {
-    const token = localStorage.getItem("session_jwt");
-    if (!token) return;
-
-    setRevertingId(auditId);
-    try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_SERVER_URL}/v1/audit/revert/poliza/${auditId}`,
-        {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      const data = await res.json();
-      if (data.success) {
-        await loadPolizaLogs();
-      }
-    } catch {
-      // silently fail
-    } finally {
-      setRevertingId(null);
-    }
-  }
 
   function formatDate(iso: string) {
     const d = new Date(iso);
@@ -167,20 +142,7 @@ const AdminPanel: React.FC = () => {
                     <Td>{log.new_value ?? "-"}</Td>
                     <Td>{log.agente_email}</Td>
                     <SourceTd $source={log.source}>{log.source}</SourceTd>
-                    <Td>
-                      {log.old_value && log.source !== "revert" ? (
-                        <UndoBtn
-                          disabled={revertingId === log.audit_id}
-                          onClick={() => handleRevert(log.audit_id)}
-                        >
-                          {revertingId === log.audit_id
-                            ? "Revirtiendo..."
-                            : "Deshacer"}
-                        </UndoBtn>
-                      ) : (
-                        "-"
-                      )}
-                    </Td>
+                    <Td>-</Td>
                   </tr>
                 ))
               )}
@@ -381,23 +343,3 @@ const PagBtn = styled.button`
   }
 `;
 
-const UndoBtn = styled.button`
-  ${textTheme__css}
-  background: transparent;
-  border: 1px solid #ef4444;
-  color: #ef4444;
-  padding: 3px 10px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-
-  &:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  &:hover:not(:disabled) {
-    background: #ef4444;
-    color: #fff;
-  }
-`;
