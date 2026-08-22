@@ -129,7 +129,7 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
         {isAuthenticated ? (
           <>
             <CustomNavLink to="/dashboard">Dashboard</CustomNavLink>
-            <CustomNavLink to="/calendar">Calendario</CustomNavLink>
+            {isSubscribed && <CustomNavLink to="/calendar">Calendario</CustomNavLink>}
             {isAdmin && <CustomNavLink to="/admin">Admin Panel</CustomNavLink>}
 
             <Divider />
@@ -288,10 +288,12 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
                   <Icon iconName="Dashboard" size={18} />
                   <span>Dashboard</span>
                 </DrawerLink>
-                <DrawerLink to="/calendar" onClick={() => setMenuOpen(false)}>
-                  <Icon iconName="CalendarMonth" size={18} />
-                  <span>Calendario</span>
-                </DrawerLink>
+                {isSubscribed && (
+                  <DrawerLink to="/calendar" onClick={() => setMenuOpen(false)}>
+                    <Icon iconName="CalendarMonth" size={18} />
+                    <span>Calendario</span>
+                  </DrawerLink>
+                )}
                 {isAdmin && (
                   <DrawerLink to="/admin" onClick={() => setMenuOpen(false)}>
                     <Icon iconName="AdminPanelSettings" size={18} />
