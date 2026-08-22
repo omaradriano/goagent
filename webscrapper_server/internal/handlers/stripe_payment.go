@@ -13,6 +13,7 @@ import (
 	"github.com/stripe/stripe-go/v74"
 	"github.com/stripe/stripe-go/v74/checkout/session"
 	stripesubscription "github.com/stripe/stripe-go/v74/subscription"
+	invoiceApi "github.com/stripe/stripe-go/v74/invoice"
 	"github.com/stripe/stripe-go/v74/webhook"
 )
 
@@ -228,6 +229,60 @@ func StripeWebhookHandler(w http.ResponseWriter, r *http.Request) {
 			oldVal := "true"
 			newVal := "false"
 			_ = deps.AuditRepo.LogAgenteChange(ctx, failedAgenteID, "is_subscribed", &oldVal, &newVal, nil, "webhook")
+		}
+
+	case "charge.refunded":
+		chargeBytes, err := json.Marshal(event.Data.Object)
+		if err != nil {
+			services.HandleResponseError(http.StatusInternalServerError, "Error serializando charge", w)
+			return
+		}
+
+		var charge stripe.Charge
+		if err = json.Unmarshal(chargeBytes, &charge); err != nil {
+			services.HandleResponseError(http.StatusBadRequest, "Error mapeando charge", w)
+			return
+		}
+
+		if charge.Invoice == nil {
+			break
+		}
+
+		inv, invErr := invoiceApi.Get(charge.Invoice.ID, nil)
+		if invErr != nil {
+			services.Log.ErrorMessage("Error obteniendo invoice del reembolso: " + invErr.Error())
+			break
+		}
+
+		if inv.Subscription == nil {
+			break
+		}
+
+		subscriptionID := inv.Subscription.ID
+
+		_, cancelErr := stripesubscription.Cancel(subscriptionID, nil)
+		if cancelErr != nil {
+			services.Log.ErrorMessage("Error cancelando suscripción por reembolso " + subscriptionID + ": " + cancelErr.Error())
+		}
+
+		var refundedAgenteID int
+		deps.DB.Raw("SELECT agente_id FROM agentes WHERE stripe_subscription_id = ?", subscriptionID).Scan(&refundedAgenteID)
+
+		if err = deps.AgenteRepo.UpdateSubscription(ctx, map[string]any{
+			"is_subscribed":          false,
+			"cancel_at_period_end":   false,
+			"current_period_end":     0,
+			"stripe_subscription_id": nil,
+		}, "stripe_subscription_id = ?", subscriptionID); err != nil {
+			services.Log.ErrorMessage("Error desactivando suscripción por reembolso " + subscriptionID + ": " + err.Error())
+			services.HandleResponseError(http.StatusInternalServerError, "Error interno actualizando DB", w)
+			return
+		}
+
+		if refundedAgenteID > 0 {
+			oldVal := "true"
+			newVal := "false"
+			_ = deps.AuditRepo.LogAgenteChange(ctx, refundedAgenteID, "is_subscribed", &oldVal, &newVal, nil, "webhook-refund")
 		}
 
 	case "customer.subscription.deleted":
