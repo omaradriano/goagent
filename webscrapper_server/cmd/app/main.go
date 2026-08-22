@@ -27,6 +27,7 @@ func main() {
 	}
 	db.GormDB = gormConn
 
+	middlewares.SubscriptionDB = gormConn
 	handlers.InitDeps(gormConn)
 	db.SetTokenValidator(repository.NewAgenteRepository(gormConn))
 
