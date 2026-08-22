@@ -151,11 +151,57 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
 
               {profileOpen && (
                 <ProfileDropdown>
-                  {/* Email completo */}
-                  <ProfileEmailStrip>
-                    <Icon iconName="AccountCircle" size={16} customColor="#155dfc" />
-                    <ProfileEmail>{auth?.session?.email}</ProfileEmail>
-                  </ProfileEmailStrip>
+                  {/* Perfil del agente */}
+                  <ProfileSection>
+                    <ProfileAvatarLarge>
+                      <Icon iconName="AccountCircle" size={36} customColor="#155dfc" />
+                    </ProfileAvatarLarge>
+                    <ProfileName>{auth?.session?.email}</ProfileName>
+                    <ProfileRoleBadge $role={auth?.session?.agente_role ?? "user"}>
+                      {auth?.session?.agente_role === "admin" ? "Administrador" : "Usuario"}
+                    </ProfileRoleBadge>
+                  </ProfileSection>
+
+                  {/* Info del agente */}
+                  <ProfileInfoGrid>
+                    <ProfileInfoItem>
+                      <ProfileInfoLabel>No. Agente</ProfileInfoLabel>
+                      <ProfileInfoValue>{auth?.session?.no_agente || "—"}</ProfileInfoValue>
+                    </ProfileInfoItem>
+                    <ProfileInfoItem>
+                      <ProfileInfoLabel>Aseguradora</ProfileInfoLabel>
+                      <ProfileInfoValue>{auth?.session?.insurance_name || "—"}</ProfileInfoValue>
+                    </ProfileInfoItem>
+                  </ProfileInfoGrid>
+
+                  <DrawerDivider />
+
+                  {/* Suscripción */}
+                  <ProfileSubSection>
+                    <ProfileInfoLabel>Suscripción</ProfileInfoLabel>
+                    {isSubscribed ? (
+                      <>
+                        <SubStatusRow>
+                          <SubStatusDot $active />
+                          <SubStatusText>GoAgent Pro · Activa</SubStatusText>
+                        </SubStatusRow>
+                        {subscription?.periodEnd ? (
+                          <SubDetailText $warn>
+                            Cancelada · Acceso hasta el {subscription.periodEnd}
+                          </SubDetailText>
+                        ) : (
+                          <SubDetailText>
+                            Próxima renovación automática
+                          </SubDetailText>
+                        )}
+                      </>
+                    ) : (
+                      <SubStatusRow>
+                        <SubStatusDot $active={false} />
+                        <SubStatusText>Sin suscripción activa</SubStatusText>
+                      </SubStatusRow>
+                    )}
+                  </ProfileSubSection>
 
                   <DrawerDivider />
 
@@ -170,7 +216,7 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
                     <span>Cambiar contraseña</span>
                   </ProfileItem>
 
-                  {/* Cancelar suscripción (solo si activa) */}
+                  {/* Cancelar suscripción (solo si activa y no cancelada ya) */}
                   {isSubscribed && !subscription?.periodEnd && (
                     <CancelSubBtn onClick={handleCancelSubscription}>
                       <Icon iconName="Cancel" size={16} customColor="#ef4444" />
@@ -429,31 +475,14 @@ const ProfileDropdown = styled.div`
   position: absolute;
   top: calc(100% + 10px);
   right: 0;
-  min-width: 230px;
-  border-radius: 12px;
+  min-width: 280px;
+  border-radius: 14px;
   padding: 8px;
   animation: ${fadeDown} 0.2s ease;
   z-index: 200;
   ${sectionTheme__css}
   ${sectionBorderTheme__css}
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
-`;
-
-const ProfileEmailStrip = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px 4px;
-`;
-
-const ProfileEmail = styled.span`
-  font-size: 13px;
-  font-weight: 500;
-  color: #a9a9a9;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 170px;
 `;
 
 const ProfileItem = styled.button`
@@ -499,6 +528,110 @@ const CancelSubBtn = styled.button`
 
 const ProfileLogoutBtn = styled(CancelSubBtn)``;
 
+// ── Profile section (desktop dropdown) ─────────────────────────────────────────
+
+const ProfileSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 12px 8px;
+`;
+
+const ProfileAvatarLarge = styled.div`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+`;
+
+const ProfileName = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  ${textTheme__css}
+  text-align: center;
+  word-break: break-all;
+`;
+
+const ProfileRoleBadge = styled.span<{ $role: string }>`
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: ${(p) =>
+    p.$role === "admin" ? "rgba(245,158,11,0.12)" : "rgba(21,93,252,0.1)"};
+  color: ${(p) => (p.$role === "admin" ? "#d97706" : "#155dfc")};
+  border: 1px solid
+    ${(p) =>
+      p.$role === "admin" ? "rgba(245,158,11,0.25)" : "rgba(21,93,252,0.2)"};
+`;
+
+const ProfileInfoGrid = styled.div`
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px 8px;
+`;
+
+const ProfileInfoItem = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: ${(p) =>
+    p.theme.mode === "Dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)"};
+`;
+
+const ProfileInfoLabel = styled.span`
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #888;
+`;
+
+const ProfileInfoValue = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  ${textTheme__css}
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+`;
+
+const ProfileSubSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px;
+`;
+
+const SubStatusRow = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 8px;
+`;
+
+const SubStatusDot = styled.div<{ $active: boolean }>`
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: ${(p) => (p.$active ? "#22c55e" : "#888")};
+  flex-shrink: 0;
+`;
+
+const SubStatusText = styled.span`
+  font-size: 13px;
+  font-weight: 600;
+  ${textTheme__css}
+`;
+
+const SubDetailText = styled.span<{ $warn?: boolean }>`
+  font-size: 12px;
+  color: ${(p) => (p.$warn ? "#d97706" : "#888")};
+  padding-left: 16px;
+`;
 
 // ── Mobile ────────────────────────────────────────────────────────────────────
 
