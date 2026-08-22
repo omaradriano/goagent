@@ -461,8 +461,11 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 
 	err = deps.DB.WithContext(r.Context()).Raw(`
 		SELECT p.poliza_uuid, p.dia_cobro, p.estatus, p.fecha_emision, p.forma_pago, p.medio_cobro,
-			p.numpoliza, p.plan, p.tipo_seguro, p.addr_calle, p.addr_codigopostal, p.addr_ciudad, p.addr_colonia,
-			p.addr_estado, p.moneda, p.pais, p.email, p.telefono, ppc.next_payment, p.poliza_id
+			p.numpoliza, p.plan, p.tipo_seguro,
+			COALESCE(p.addr_calle, 'No definido'), COALESCE(p.addr_codigopostal, '00000'),
+			COALESCE(p.addr_ciudad, 'No definido'), COALESCE(p.addr_colonia, 'No definido'),
+			COALESCE(p.addr_estado, 'No definido'), COALESCE(p.moneda, ''), COALESCE(p.pais, ''),
+			COALESCE(p.email, ''), COALESCE(p.telefono, ''), ppc.next_payment, p.poliza_id
 		FROM polizas p
 		JOIN polizas_payments_conf ppc ON p.poliza_id = ppc.poliza_id
 		JOIN agentes a ON p.agente_id = a.agente_id
@@ -622,9 +625,12 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 
 	selectQuery := `
 		SELECT p.poliza_id, p.dia_cobro, p.estatus, p.fecha_emision, p.forma_pago,
-			p.medio_cobro, p.numpoliza, p.plan, p.tipo_seguro, p.addr_calle,
-			p.addr_codigopostal, p.addr_ciudad, p.addr_colonia, p.addr_estado,
-			ppc.next_payment, p.moneda, p.pais, p.telefono, p.email, p.suma_asegurada,
+			p.medio_cobro, p.numpoliza, p.plan, p.tipo_seguro,
+			COALESCE(p.addr_calle, 'No definido'), COALESCE(p.addr_codigopostal, '00000'),
+			COALESCE(p.addr_ciudad, 'No definido'), COALESCE(p.addr_colonia, 'No definido'),
+			COALESCE(p.addr_estado, 'No definido'),
+			ppc.next_payment, COALESCE(p.moneda, ''), COALESCE(p.pais, ''),
+			COALESCE(p.telefono, ''), COALESCE(p.email, ''), COALESCE(p.suma_asegurada, ''),
 			p.last_modified, p.poliza_uuid, COALESCE(ppl.paid_period::text, '') as "payment_exist"` + baseQuery
 
 	orderBy := `ppc.next_payment ASC`
