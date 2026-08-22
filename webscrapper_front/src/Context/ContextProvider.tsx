@@ -38,6 +38,7 @@ const ContextProvider = ({ children }: { children: React.ReactNode }) => {
   const [dataHasChanged, setDataHasChanged] = useState<number>(0);
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
   const [periodEnd, setPeriodEnd] = useState<string | null>(null);
+  const [renewalDate, setRenewalDate] = useState<string | null>(null);
 
   // 💡 Estado para saber si ya terminamos de validar la sesión y no renderizar a ciegas
   const [loading, setLoading] = useState(true);
@@ -132,13 +133,15 @@ const ContextProvider = ({ children }: { children: React.ReactNode }) => {
               };
             } = await sub_req.json();
             setIsSubscribed(sub_data.payload?.is_subscribed ?? false);
-            if (sub_data.payload?.cancel_at_period_end && sub_data.payload?.current_period_end) {
-              setPeriodEnd(
-                new Date(sub_data.payload.current_period_end * 1000).toLocaleDateString(
-                  "es-MX",
-                  { day: "numeric", month: "long", year: "numeric" },
-                ),
+            if (sub_data.payload?.current_period_end) {
+              const formattedDate = new Date(sub_data.payload.current_period_end * 1000).toLocaleDateString(
+                "es-MX",
+                { day: "numeric", month: "long", year: "numeric" },
               );
+              setRenewalDate(formattedDate);
+              if (sub_data.payload?.cancel_at_period_end) {
+                setPeriodEnd(formattedDate);
+              }
             }
           }
         } catch {
@@ -168,7 +171,7 @@ const ContextProvider = ({ children }: { children: React.ReactNode }) => {
     >
       <ThemeContext.Provider value={{ theme, setTheme }}>
         <DataChangedContext.Provider value={{ dataHasChanged, setDataHasChanged }}>
-          <SubscriptionContext.Provider value={{ isSubscribed, setIsSubscribed, periodEnd, setPeriodEnd }}>
+          <SubscriptionContext.Provider value={{ isSubscribed, setIsSubscribed, periodEnd, setPeriodEnd, renewalDate, setRenewalDate }}>
             <ThemeProvider theme={themeValues as DefaultTheme}>
               <UserModeContext.Provider value={"Admin"}>
                 <AlertContext.Provider

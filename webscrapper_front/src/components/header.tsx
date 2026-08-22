@@ -191,7 +191,7 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
                           </SubDetailText>
                         ) : (
                           <SubDetailText>
-                            Próxima renovación automática
+                            Próxima renovación{subscription?.renewalDate ? ` el ${subscription.renewalDate}` : ' automática'}
                           </SubDetailText>
                         )}
                       </>

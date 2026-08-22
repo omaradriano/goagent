@@ -35,4 +35,6 @@ export const SubscriptionContext = createContext<{
   setIsSubscribed: React.Dispatch<React.SetStateAction<boolean>>;
   periodEnd: string | null;
   setPeriodEnd: React.Dispatch<React.SetStateAction<string | null>>;
+  renewalDate: string | null;
+  setRenewalDate: React.Dispatch<React.SetStateAction<string | null>>;
 } | null>(null)
