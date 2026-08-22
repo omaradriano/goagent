@@ -122,28 +122,6 @@ const SecondaryButton = styled(NavLink)`
   }
 `;
 
-// ── HERO VISUAL PLACEHOLDER ───────────────────────────────────────────────────
-const HeroVisual = styled.div`
-  width: 100%;
-  max-width: 900px;
-  height: clamp(220px, 32vw, 420px);
-  margin: 3rem auto 0;
-  border-radius: 20px;
-  background: #ddd5c8;
-  border: 1px solid #c4bab0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-  position: relative;
-`;
-
-const PlaceholderLabel = styled.span`
-  font-size: 0.8rem;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #999;
-`;
 
 // ── STATS BAR ────────────────────────────────────────────────────────────────
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -578,11 +556,6 @@ const Home: React.FC = () => {
           <PrimaryButton to="/auth/register">Registrate gratis</PrimaryButton>
           <SecondaryButton to="/auth/signin">Iniciar sesión</SecondaryButton>
         </HeroCTAGroup>
-        <HeroVisual>
-          <PlaceholderLabel>
-            Captura de pantalla / imagen del producto
-          </PlaceholderLabel>
-        </HeroVisual>
       </HeroSection>
 
       {/* STATS */}
