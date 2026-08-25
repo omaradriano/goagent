@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "GoAgent - Sincronización de Pólizas",
   "author": "Omar Acosta",
-  "version": "2.0",
+  "version": "2.1",
   "description": "Extensión para sincronizar datos de pólizas desde la plataforma de Seguros Monterrey hacia GoAgent",
   "permissions": ["activeTab", "scripting", "tabs", "storage", "identity"],
   "oauth2": {
