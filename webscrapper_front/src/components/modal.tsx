@@ -309,6 +309,14 @@ const Modal: React.FC<ModalProps> = ({
                         {formatDate(polizaData.fecha_emision)}
                       </FieldValue>
                     </Field>
+                    <FullWidthField>
+                      <FieldLabel>Último pago registrado</FieldLabel>
+                      <FieldValue>
+                        {polizaData.payment_exist
+                          ? formatDate(polizaData.payment_exist)
+                          : "Sin pagos registrados"}
+                      </FieldValue>
+                    </FullWidthField>
                     <Field>
                       <FieldLabel>Moneda</FieldLabel>
                       <FieldValue>{polizaData.moneda}</FieldValue>
@@ -630,6 +638,10 @@ const Field = styled.div`
   display: flex;
   flex-direction: column;
   gap: 3px;
+`;
+
+const FullWidthField = styled(Field)`
+  grid-column: 1 / -1;
 `;
 
 const FieldLabel = styled.span`
