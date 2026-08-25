@@ -221,7 +221,7 @@ func (r *polizaRepository) GetPolizasPaginated(ctx context.Context, filters Poli
 func (r *polizaRepository) UpdatePolizaFields(ctx context.Context, numPoliza string, agenteID int, fields map[string]interface{}, auditRepo AuditRepository) error {
 	var poliza models.Poliza
 	if err := r.db.WithContext(ctx).
-		Select("poliza_id, dia_cobro, forma_pago, estatus, telefono").
+		Select("poliza_id, dia_cobro, forma_pago, estatus, telefono, email").
 		Where("numpoliza = ? AND agente_id = ?", numPoliza, agenteID).
 		First(&poliza).Error; err != nil {
 		return err
@@ -236,6 +236,11 @@ func (r *polizaRepository) UpdatePolizaFields(ctx context.Context, numPoliza str
 		oldFields["telefono"] = *poliza.Telefono
 	} else {
 		oldFields["telefono"] = ""
+	}
+	if poliza.Email != nil {
+		oldFields["email"] = *poliza.Email
+	} else {
+		oldFields["email"] = ""
 	}
 
 	result := r.db.WithContext(ctx).

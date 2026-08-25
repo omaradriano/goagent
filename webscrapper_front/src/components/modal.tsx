@@ -26,6 +26,7 @@ interface EditableFields {
   dia_cobro: number;
   estatus: StatusValues;
   telefono: string;
+  email: string;
 }
 
 export interface ModalProps {
@@ -58,6 +59,7 @@ const Modal: React.FC<ModalProps> = ({
     dia_cobro: polizaData.diaCobro ?? 0,
     estatus: polizaData.estatus ?? "En Vigor",
     telefono: polizaData.telefono ?? "",
+    email: polizaData.email ?? "",
   });
 
   // Use a key to force remount and reset state when polizaData or modalOpen changes
@@ -79,7 +81,8 @@ const Modal: React.FC<ModalProps> = ({
     editFields.forma_pago !== polizaData.forma_pago ||
     editFields.dia_cobro !== polizaData.diaCobro ||
     editFields.estatus !== polizaData.estatus ||
-    editFields.telefono !== (polizaData.telefono ?? "");
+    editFields.telefono !== (polizaData.telefono ?? "") ||
+    editFields.email !== (polizaData.email ?? "");
 
   const showSubscriptionAlert = () => {
     alertContext?.setAlertOptions({
@@ -137,6 +140,9 @@ const Modal: React.FC<ModalProps> = ({
       }
       if (editFields.telefono !== (polizaData.telefono ?? "")) {
         body.telefono = editFields.telefono;
+      }
+      if (editFields.email !== (polizaData.email ?? "")) {
+        body.email = editFields.email;
       }
       if (editFields.forma_pago !== polizaData.forma_pago) {
         body.forma_pago = editFields.forma_pago;
@@ -333,6 +339,22 @@ const Modal: React.FC<ModalProps> = ({
                           setEditFields((prev) => ({
                             ...prev,
                             telefono: e.target.value,
+                          })) : undefined
+                        }
+                        onFocus={!isSubscribed ? showSubscriptionAlert : undefined}
+                      />
+                    </Field>
+                    <Field>
+                      <FieldLabel>Email</FieldLabel>
+                      <EditInput
+                        type="email"
+                        value={editFields.email}
+                        placeholder="Sin email"
+                        readOnly={!isSubscribed}
+                        onChange={isSubscribed ? (e) =>
+                          setEditFields((prev) => ({
+                            ...prev,
+                            email: e.target.value,
                           })) : undefined
                         }
                         onFocus={!isSubscribed ? showSubscriptionAlert : undefined}

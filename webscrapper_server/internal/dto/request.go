@@ -29,6 +29,7 @@ type PatchItem_Poliza struct {
 	NumPoliza string  `json:"numpoliza"`
 	DiaCobro  *int16  `json:"dia_cobro,omitempty"`
 	Telefono  *string `json:"telefono,omitempty"`
+	Email     *string `json:"email,omitempty"`
 	FormaPago *string `json:"forma_pago,omitempty"`
 	Estatus   *string `json:"estatus,omitempty"`
 }

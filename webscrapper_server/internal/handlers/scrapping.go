@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"net/mail"
 	"strconv"
 	"strings"
 	"time"
@@ -337,6 +338,17 @@ func ApiPatchPoliza(w http.ResponseWriter, r *http.Request) {
 
 	if item.Telefono != nil {
 		fields["telefono"] = *item.Telefono
+	}
+
+	if item.Email != nil {
+		email := strings.TrimSpace(*item.Email)
+		if email != "" {
+			if _, err := mail.ParseAddress(email); err != nil {
+				services.HandleResponseError(http.StatusBadRequest, "Email inválido", w)
+				return
+			}
+		}
+		fields["email"] = email
 	}
 
 	if item.FormaPago != nil {
