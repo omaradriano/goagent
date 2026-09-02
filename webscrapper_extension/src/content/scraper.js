@@ -77,7 +77,7 @@ export function getPolizasIds() {
 
 export function getPagerInfo() {
   const table = document.getElementById("ctl00_ContentPlaceHolder1_GVPolList");
-  if (!table) return { currentPage: 1, nextPage: null };
+  if (!table) return { currentPage: 1, nextPage: null, totalPages: 1 };
 
   const pagerLinks = Array.from(table.querySelectorAll("tr td table a")).filter(
     (a) => /Page\$\d+/.test(a.getAttribute("href") || ""),
@@ -94,6 +94,7 @@ export function getPagerInfo() {
   }
 
   let nextPage = null;
+  let totalPages = currentPage;
   for (const a of pagerLinks) {
     const match = a.getAttribute("href").match(/Page\$(\d+)/);
     if (!match) continue;
@@ -101,9 +102,12 @@ export function getPagerInfo() {
     if (num > currentPage && (nextPage === null || num < nextPage)) {
       nextPage = num;
     }
+    if (num > totalPages) {
+      totalPages = num;
+    }
   }
 
-  return { currentPage, nextPage };
+  return { currentPage, nextPage, totalPages };
 }
 
 export function getLastPendingPaymentDate() {

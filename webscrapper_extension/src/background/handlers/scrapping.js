@@ -141,8 +141,14 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       (item) => !dbSet.has(item.idPoliza),
     );
 
+    const pagerRes = await chrome.tabs.sendMessage(hiddenTab.id, {
+      action: "get-pager-info",
+    });
+    const totalPages = pagerRes?.data?.totalPages ?? pageNum;
+    const nextPage = pagerRes?.data?.nextPage ?? null;
+
     console.log(
-      `[GoAgent][sync] pagina ${pageNum}: ${pageItems.length} poliza(s) nueva(s) de ${listRes?.data?.polizas?.length ?? 0} en la pagina`,
+      `[GoAgent][sync] pagina ${pageNum} de ${totalPages}: ${pageItems.length} poliza(s) nueva(s) de ${listRes?.data?.polizas?.length ?? 0} en la pagina`,
     );
 
     for (let i = 0; i < pageItems.length; i++) {
@@ -159,7 +165,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
         data: {
           type: "loading",
           status: "success",
-          message: `Cargando registro ${totalProcessed} (página ${pageNum})`,
+          message: `Cargando registro ${totalProcessed} (página ${pageNum} de ${totalPages})`,
           submessage:
             "Se está obteniendo información de pólizas, por favor espere...",
         },
@@ -228,11 +234,6 @@ export async function handlePostAllDb(request, sender, sendResponse) {
         await goToListPage(hiddenTab.id, pageNum).catch(() => {});
       }
     }
-
-    const pagerRes = await chrome.tabs.sendMessage(hiddenTab.id, {
-      action: "get-pager-info",
-    });
-    const nextPage = pagerRes?.data?.nextPage ?? null;
 
     if (!nextPage) {
       console.log(
