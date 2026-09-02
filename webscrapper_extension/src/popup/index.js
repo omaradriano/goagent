@@ -1,4 +1,5 @@
 import { Alert } from "./components/alert.js";
+import { Loader } from "./components/loader.js";
 import { setupAuthView } from "./views/auth.js";
 import {
   setupManagementView,
@@ -17,27 +18,34 @@ function changeView(viewName) {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  const [tab] = await chrome.tabs.query({
-    active: true,
-    currentWindow: true,
-  });
+  const loader = new Loader();
+  loader.show();
 
-  const currentPage = tab.url.split("/").pop();
-  const currentTabId = tab.id;
-  const alert = new Alert();
+  try {
+    const [tab] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
 
-  setupAuthView(changeView, loadManagementUI);
-  setupManagementView(alert, changeView, currentPage, currentTabId);
+    const currentPage = tab.url.split("/").pop();
+    const currentTabId = tab.id;
+    const alert = new Alert();
 
-  const authRes = await chrome.runtime.sendMessage({
-    action: "verify-session",
-  });
+    setupAuthView(changeView, loadManagementUI);
+    setupManagementView(alert, changeView, currentPage, currentTabId);
 
-  if (!authRes.success) {
-    changeView("authentication__signin");
-    return;
+    const authRes = await chrome.runtime.sendMessage({
+      action: "verify-session",
+    });
+
+    if (!authRes.success) {
+      changeView("authentication__signin");
+      return;
+    }
+
+    changeView("management");
+    await loadManagementUI(authRes);
+  } finally {
+    loader.close();
   }
-
-  changeView("management");
-  await loadManagementUI(authRes);
 });
