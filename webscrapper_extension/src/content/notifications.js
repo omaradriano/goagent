@@ -22,6 +22,11 @@ export function showNotification(options) {
           ? `
         <p class="message">${options.message}</p>
         <span class="submessage">${options.submessage}</span>
+        ${
+          options.interruptible
+            ? `<button type="button" class="interruptSync">Interrumpir carga</button>`
+            : ""
+        }
       `
           : `
         <p class="message">Ha ocurrido un error</p>
@@ -38,6 +43,15 @@ export function showNotification(options) {
   notification
     .querySelector(".closeNotification")
     .addEventListener("click", () => notification.remove());
+
+  const interruptBtn = notification.querySelector(".interruptSync");
+  if (interruptBtn) {
+    interruptBtn.addEventListener("click", () => {
+      interruptBtn.disabled = true;
+      interruptBtn.textContent = "Deteniendo...";
+      chrome.runtime.sendMessage({ action: "interrupt-sync" });
+    });
+  }
 
   document.body.appendChild(notification);
 }

@@ -4,6 +4,16 @@ import { waitForTabLoad } from "../tab-utils.js";
 const LIST_PAGE_URL =
   "https://www.lineamonterrey.com.mx/AsesoresWeb/Consultas/Polizas/Asesor/PolizasAgente.aspx#robot";
 
+let syncInterruptRequested = false;
+
+export function handleInterruptSync(request, sender, sendResponse) {
+  syncInterruptRequested = true;
+  console.log(
+    "[GoAgent][sync] interrupcion de sincronizacion solicitada por el usuario",
+  );
+  sendResponse({ success: true });
+}
+
 async function goToListPage(tabId, targetPage) {
   await chrome.tabs.update(tabId, { url: LIST_PAGE_URL });
   await waitForTabLoad(tabId);
@@ -94,6 +104,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
   const failedPolizas = [];
   let notificationId = null;
   let totalProcessed = 0;
+  syncInterruptRequested = false;
 
   console.log(
     "[GoAgent][sync] iniciando sincronizacion de todas las paginas disponibles",
@@ -107,6 +118,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       message: "Iniciando carga de registros...",
       submessage:
         "Se está obteniendo información de pólizas, por favor espere...",
+      interruptible: true,
     },
   });
   notificationId = notifRes.data.notification_id;
@@ -125,7 +137,10 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     dbPolizas.map((value) => (typeof value === "string" ? value.trim() : value)),
   );
 
-  const hiddenTab = await chrome.tabs.create({
+  let hiddenTab = null;
+
+  if (!syncInterruptRequested) {
+  hiddenTab = await chrome.tabs.create({
     url: LIST_PAGE_URL,
     active: false,
   });
@@ -168,6 +183,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
           message: `Cargando registro ${totalProcessed} (página ${pageNum} de ${totalPages})`,
           submessage:
             "Se está obteniendo información de pólizas, por favor espere...",
+          interruptible: true,
         },
       });
       notificationId = notifRes.data.notification_id;
@@ -233,6 +249,17 @@ export async function handlePostAllDb(request, sender, sendResponse) {
 
         await goToListPage(hiddenTab.id, pageNum).catch(() => {});
       }
+
+      if (syncInterruptRequested) {
+        console.log(
+          `[GoAgent][sync] interrupcion solicitada, deteniendo despues de la poliza ${totalProcessed}`,
+        );
+        break;
+      }
+    }
+
+    if (syncInterruptRequested) {
+      break;
     }
 
     if (!nextPage) {
@@ -257,6 +284,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     await waitForTabLoad(hiddenTab.id);
     pageNum = nextPage;
   }
+  }
 
   if (failedPolizas.length > 0) {
     console.warn(
@@ -266,10 +294,12 @@ export async function handlePostAllDb(request, sender, sendResponse) {
   }
 
   console.log(
-    `[GoAgent][sync] scraping finalizado: ${completedData.length} poliza(s) listas para enviar`,
+    `[GoAgent][sync] scraping finalizado: ${completedData.length} poliza(s) listas para enviar (interrumpido: ${syncInterruptRequested})`,
   );
 
-  await chrome.tabs.remove(hiddenTab.id).catch(() => {});
+  if (hiddenTab) {
+    await chrome.tabs.remove(hiddenTab.id).catch(() => {});
+  }
 
   if (notificationId) {
     await chrome.tabs.sendMessage(originalTabId, {
@@ -284,14 +314,20 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       data: {
         type: "done",
         status: "success",
-        message: "No hay registros nuevos para sincronizar.",
-        submessage: "Todas las pólizas disponibles ya se encuentran en el sistema.",
+        message: syncInterruptRequested
+          ? "Sincronización interrumpida. No se capturaron registros nuevos."
+          : "No hay registros nuevos para sincronizar.",
+        submessage: syncInterruptRequested
+          ? "No se envió ningún registro a la base de datos."
+          : "Todas las pólizas disponibles ya se encuentran en el sistema.",
       },
     });
 
     sendResponse({
       success: true,
-      message: "No hay registros nuevos para sincronizar",
+      message: syncInterruptRequested
+        ? "Sincronización interrumpida sin registros nuevos"
+        : "No hay registros nuevos para sincronizar",
     });
     return;
   }
@@ -307,7 +343,9 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       data: {
         type: "done",
         status: "success",
-        message: "Se ha completado la carga de los registros.",
+        message: syncInterruptRequested
+          ? `Sincronización interrumpida. Se cargaron ${completedData.length} registro(s) antes de detenerse.`
+          : "Se ha completado la carga de los registros.",
         submessage:
           "Ahora puede consultar los detalles de sus pólizas en la sección de mis pólizas en la aplicación web.",
       },
@@ -315,7 +353,9 @@ export async function handlePostAllDb(request, sender, sendResponse) {
 
     sendResponse({
       success: true,
-      message: "Se han cargado todos los registros con éxito",
+      message: syncInterruptRequested
+        ? `Sincronización interrumpida. Se cargaron ${completedData.length} registro(s).`
+        : "Se han cargado todos los registros con éxito",
     });
   } catch (error) {
     console.error(

@@ -11,6 +11,7 @@ import {
   handlePostUniqueDb,
   handlePostAllDb,
   handleGetUniqueInDb,
+  handleInterruptSync,
 } from "./handlers/scrapping.js";
 
 const handlers = {
@@ -20,6 +21,7 @@ const handlers = {
   "post-unique-db": handlePostUniqueDb,
   "post-all-db": handlePostAllDb,
   "get-unique-in-db": handleGetUniqueInDb,
+  "interrupt-sync": handleInterruptSync,
   "exec-authentication-by-google": handleAuthByGoogle,
   "exec-authentication-by-credentials": handleAuthByCredentials,
   "exec-delete-session": handleDeleteSession,
