@@ -1,3 +1,7 @@
 node_modules/
 dist/
 .DS_Store
+
+# No son secretos (solo URLs), se commitean a proposito
+!.env.production
+!.env.development

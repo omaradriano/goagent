@@ -6,9 +6,14 @@ import { watch } from "fs";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const isWatch = process.argv.includes("--watch");
+const isLocal = process.argv.includes("--local");
+const mode = isLocal ? "development" : "production";
+
+console.log(`Building in "${mode}" mode (.env.${mode})`);
 
 const popupConfig = {
   root,
+  mode,
   configFile: false,
   publicDir: "public",
   build: {
@@ -30,6 +35,7 @@ const popupConfig = {
 
 const backgroundConfig = {
   root,
+  mode,
   configFile: false,
   publicDir: false,
   build: {
@@ -46,6 +52,7 @@ const backgroundConfig = {
 
 const contentConfig = {
   root,
+  mode,
   configFile: false,
   publicDir: false,
   build: {
