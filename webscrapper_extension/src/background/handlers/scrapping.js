@@ -4,6 +4,25 @@ import { waitForTabLoad } from "../tab-utils.js";
 const LIST_PAGE_URL =
   "https://www.lineamonterrey.com.mx/AsesoresWeb/Consultas/Polizas/Asesor/PolizasAgente.aspx#robot";
 
+async function goToListPage(tabId, targetPage) {
+  await chrome.tabs.update(tabId, { url: LIST_PAGE_URL });
+  await waitForTabLoad(tabId);
+
+  if (targetPage > 1) {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      world: "MAIN",
+      args: [`Page$${targetPage}`],
+      func: (arg) => {
+        if (typeof __doPostBack === "function") {
+          __doPostBack("ctl00$ContentPlaceHolder1$GVPolList", arg);
+        }
+      },
+    });
+    await waitForTabLoad(tabId);
+  }
+}
+
 export async function handleGetPolizasDetails(request, sender, sendResponse) {
   try {
     const data = await apiRequest("/v1/scrapping/details");
@@ -70,10 +89,15 @@ export async function handlePostUniqueDb(request, sender, sendResponse) {
 }
 
 export async function handlePostAllDb(request, sender, sendResponse) {
-  const polizasIds = request.payload;
   const originalTabId = request.tab;
   const completedData = [];
+  const failedPolizas = [];
   let notificationId = null;
+  let totalProcessed = 0;
+
+  console.log(
+    "[GoAgent][sync] iniciando sincronizacion de todas las paginas disponibles",
+  );
 
   let notifRes = await chrome.tabs.sendMessage(originalTabId, {
     action: "show-progress-message",
@@ -87,76 +111,162 @@ export async function handlePostAllDb(request, sender, sendResponse) {
   });
   notificationId = notifRes.data.notification_id;
 
+  let dbPolizas = [];
+  try {
+    const dbData = await apiRequest("/v1/scrapping/polizas_ids");
+    dbPolizas = dbData.payload.polizas ?? [];
+  } catch (error) {
+    console.error(
+      "[GoAgent][sync] no se pudo obtener la lista de polizas ya sincronizadas",
+      error,
+    );
+  }
+  const dbSet = new Set(
+    dbPolizas.map((value) => (typeof value === "string" ? value.trim() : value)),
+  );
+
   const hiddenTab = await chrome.tabs.create({
     url: LIST_PAGE_URL,
     active: false,
   });
   await waitForTabLoad(hiddenTab.id);
 
-  for (let i = 0; i < polizasIds.length; i++) {
-    if (notificationId) {
-      await chrome.tabs.sendMessage(originalTabId, {
-        action: "delete-notification",
-        data: { notification_id: notificationId },
-      });
-    }
+  let pageNum = 1;
 
-    notifRes = await chrome.tabs.sendMessage(originalTabId, {
-      action: "show-progress-message",
-      data: {
-        polizas_count_tracker: { current: i + 1, total: polizasIds.length },
-        type: "loading",
-        status: "success",
-        message: `Cargando registro ${i + 1} de ${polizasIds.length}`,
-        submessage:
-          "Se está obteniendo información de pólizas, por favor espere...",
-      },
+  while (true) {
+    const listRes = await chrome.tabs.sendMessage(hiddenTab.id, {
+      action: "get-polizas-list",
     });
-    notificationId = notifRes.data.notification_id;
+    const pageItems = (listRes?.data?.polizas ?? []).filter(
+      (item) => !dbSet.has(item.idPoliza),
+    );
 
-    try {
-      await chrome.scripting.executeScript({
-        target: { tabId: hiddenTab.id },
-        world: "MAIN",
-        args: [polizasIds[i].idPostback],
-        func: (id) => {
-          if (typeof __doPostBack === "function") {
-            __doPostBack(id, "");
-          }
-        },
-      });
-      await waitForTabLoad(hiddenTab.id);
+    console.log(
+      `[GoAgent][sync] pagina ${pageNum}: ${pageItems.length} poliza(s) nueva(s) de ${listRes?.data?.polizas?.length ?? 0} en la pagina`,
+    );
 
-      const scrapeRes = await chrome.tabs.sendMessage(hiddenTab.id, {
-        action: "scrapping-all",
-      });
-
-      const typeCheck = await chrome.tabs.sendMessage(hiddenTab.id, {
-        action: "get-poliza-type",
-      });
-
-      if (typeCheck.data.poliza_type_res === "recibosaportaciones") {
-        await waitForTabLoad(hiddenTab.id);
-        const recibosRes = await chrome.tabs.sendMessage(hiddenTab.id, {
-          action: "get-recibos-last-payment",
+    for (let i = 0; i < pageItems.length; i++) {
+      totalProcessed++;
+      if (notificationId) {
+        await chrome.tabs.sendMessage(originalTabId, {
+          action: "delete-notification",
+          data: { notification_id: notificationId },
         });
-        scrapeRes.payload.ultimo_pago =
-          recibosRes.data.last_payment ?? "No definido";
-      } else {
-        scrapeRes.payload.ultimo_pago = "No definido";
       }
 
-      completedData.push({ ...scrapeRes.payload });
+      notifRes = await chrome.tabs.sendMessage(originalTabId, {
+        action: "show-progress-message",
+        data: {
+          type: "loading",
+          status: "success",
+          message: `Cargando registro ${totalProcessed} (página ${pageNum})`,
+          submessage:
+            "Se está obteniendo información de pólizas, por favor espere...",
+        },
+      });
+      notificationId = notifRes.data.notification_id;
 
-      await chrome.tabs.update(hiddenTab.id, { url: LIST_PAGE_URL });
-      await waitForTabLoad(hiddenTab.id);
-    } catch (e) {
-      await chrome.tabs
-        .update(hiddenTab.id, { url: LIST_PAGE_URL })
-        .catch(() => {});
-      await waitForTabLoad(hiddenTab.id).catch(() => {});
+      try {
+        console.log(
+          `[GoAgent][sync] pagina ${pageNum} (${i + 1}/${pageItems.length}) postback`,
+          pageItems[i],
+        );
+
+        await chrome.scripting.executeScript({
+          target: { tabId: hiddenTab.id },
+          world: "MAIN",
+          args: [pageItems[i].idPostback],
+          func: (id) => {
+            if (typeof __doPostBack === "function") {
+              __doPostBack(id, "");
+            }
+          },
+        });
+        await waitForTabLoad(hiddenTab.id);
+
+        const scrapeRes = await chrome.tabs.sendMessage(hiddenTab.id, {
+          action: "scrapping-all",
+        });
+
+        if (!scrapeRes?.success) {
+          throw new Error(
+            scrapeRes?.message ?? "No se pudieron capturar los datos de la póliza",
+          );
+        }
+
+        const typeCheck = await chrome.tabs.sendMessage(hiddenTab.id, {
+          action: "get-poliza-type",
+        });
+
+        if (typeCheck.data.poliza_type_res === "recibosaportaciones") {
+          await waitForTabLoad(hiddenTab.id);
+          const recibosRes = await chrome.tabs.sendMessage(hiddenTab.id, {
+            action: "get-recibos-last-payment",
+          });
+          scrapeRes.payload.ultimo_pago =
+            recibosRes.data.last_payment ?? "No definido";
+        } else {
+          scrapeRes.payload.ultimo_pago = "No definido";
+        }
+
+        console.log(
+          `[GoAgent][sync] pagina ${pageNum} (${i + 1}/${pageItems.length}) capturado`,
+          scrapeRes.payload,
+        );
+
+        completedData.push({ ...scrapeRes.payload });
+
+        await goToListPage(hiddenTab.id, pageNum);
+      } catch (e) {
+        console.error(
+          `[GoAgent][sync] pagina ${pageNum} (${i + 1}/${pageItems.length}) fallo al capturar poliza`,
+          pageItems[i],
+          e,
+        );
+        failedPolizas.push({ poliza: pageItems[i], error: e.message });
+
+        await goToListPage(hiddenTab.id, pageNum).catch(() => {});
+      }
     }
+
+    const pagerRes = await chrome.tabs.sendMessage(hiddenTab.id, {
+      action: "get-pager-info",
+    });
+    const nextPage = pagerRes?.data?.nextPage ?? null;
+
+    if (!nextPage) {
+      console.log(
+        `[GoAgent][sync] no hay mas paginas despues de la pagina ${pageNum}`,
+      );
+      break;
+    }
+
+    console.log(`[GoAgent][sync] avanzando a la pagina ${nextPage}`);
+
+    await chrome.scripting.executeScript({
+      target: { tabId: hiddenTab.id },
+      world: "MAIN",
+      args: [`Page$${nextPage}`],
+      func: (arg) => {
+        if (typeof __doPostBack === "function") {
+          __doPostBack("ctl00$ContentPlaceHolder1$GVPolList", arg);
+        }
+      },
+    });
+    await waitForTabLoad(hiddenTab.id);
+    pageNum = nextPage;
   }
+
+  if (failedPolizas.length > 0) {
+    console.warn(
+      `[GoAgent][sync] ${failedPolizas.length} poliza(s) fallaron y no se incluyen en la carga`,
+      failedPolizas,
+    );
+  }
+
+  console.log(
+    `[GoAgent][sync] scraping finalizado: ${completedData.length} poliza(s) listas para enviar`,
+  );
 
   await chrome.tabs.remove(hiddenTab.id).catch(() => {});
 
@@ -165,6 +275,24 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       action: "delete-notification",
       data: { notification_id: notificationId },
     });
+  }
+
+  if (completedData.length === 0) {
+    await chrome.tabs.sendMessage(originalTabId, {
+      action: "show-progress-message",
+      data: {
+        type: "done",
+        status: "success",
+        message: "No hay registros nuevos para sincronizar.",
+        submessage: "Todas las pólizas disponibles ya se encuentran en el sistema.",
+      },
+    });
+
+    sendResponse({
+      success: true,
+      message: "No hay registros nuevos para sincronizar",
+    });
+    return;
   }
 
   try {
@@ -189,6 +317,10 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       message: "Se han cargado todos los registros con éxito",
     });
   } catch (error) {
+    console.error(
+      `[GoAgent][sync] fallo el POST final a /v1/scrapping/polizas con ${completedData.length} poliza(s)`,
+      error,
+    );
     sendResponse({ success: false, message: error.message });
   }
 }

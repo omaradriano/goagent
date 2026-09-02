@@ -187,17 +187,14 @@ async function handleSyncAll(tab) {
 
   const comparedList = filterNewPolizas(inViewData, inDbData);
 
-  if (comparedList.length === 0) {
-    alertModal.show(
-      "Sincronización de registros",
-      "No se han encontrado registros nuevos para sincronizar",
-    );
-    return;
-  }
+  const currentPageHint =
+    comparedList.length > 0
+      ? `Se detectaron al menos ${comparedList.length} registro(s) nuevos en esta página. `
+      : "";
 
   alertModal.show(
     "Confirmación de carga de registros",
-    `Se hará carga de ${comparedList.length} registro(s) a la base de datos. Desea continuar?`,
+    `${currentPageHint}Se buscarán y sincronizarán los registros nuevos en todas las páginas disponibles. Desea continuar?`,
     async () => {
       const res = await chrome.tabs.sendMessage(tab.id, {
         action: "post-all",

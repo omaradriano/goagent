@@ -1,4 +1,3 @@
-import { filterNewPolizas } from "../shared/compare.js";
 import {
   capturePolizaDetails,
   getPolizasList,
@@ -7,6 +6,7 @@ import {
   getLastPendingPaymentDate,
   getPolizaType,
   getPageAgentNumber,
+  getPagerInfo,
 } from "./scraper.js";
 import {
   showNotification,
@@ -18,6 +18,8 @@ const handlers = {
   "get-all-in-view": handleGetAllInView,
   "get-all-in-view-detailed": handleGetAllInViewDetailed,
   "get-unique-in-view": handleGetUniqueInView,
+  "get-polizas-list": handleGetPolizasList,
+  "get-pager-info": handleGetPagerInfo,
   "post-all": handlePostAll,
   "scrapping-unique": handleScrappingUnique,
   "scrapping-all": handleScrappingAll,
@@ -49,24 +51,19 @@ function handleGetUniqueInView(request, sender, sendResponse) {
   sendResponse({ success: true, data: capturePolizaDetails() });
 }
 
+function handleGetPolizasList(request, sender, sendResponse) {
+  sendResponse({ success: true, data: { polizas: getPolizasList() } });
+}
+
+function handleGetPagerInfo(request, sender, sendResponse) {
+  sendResponse({ success: true, data: getPagerInfo() });
+}
+
 async function handlePostAll(request, sender, sendResponse) {
   try {
-    const polizasData = getPolizasList();
-
-    const inDbData = await chrome.runtime.sendMessage({
-      action: "get-all-in-db",
-    });
-
-    const newPolizas = filterNewPolizas(
-      polizasData,
-      inDbData.data.polizas,
-      "idPoliza",
-    );
-
     const backgroundRes = await chrome.runtime.sendMessage({
       tab: request.tab,
       action: "post-all-db",
-      payload: newPolizas,
     });
 
     sendResponse({ ...backgroundRes });
