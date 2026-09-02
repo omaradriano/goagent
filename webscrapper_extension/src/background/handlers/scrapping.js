@@ -180,7 +180,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
         data: {
           type: "loading",
           status: "success",
-          message: `Cargando registro ${totalProcessed} (página ${pageNum} de ${totalPages})`,
+          message: `Cargando registro ${i + 1} de ${pageItems.length} (página ${pageNum} de ${totalPages})`,
           submessage:
             "Se está obteniendo información de pólizas, por favor espere...",
           interruptible: true,
