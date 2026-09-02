@@ -70,11 +70,12 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 
 	existingSet := make(map[string]bool)
 	for _, num := range existingNums {
-		existingSet[strings.ToLower(num)] = true
+		existingSet[strings.ToLower(strings.TrimSpace(num))] = true
 	}
 
 	var itemsToUpload []dto.PostItem_Poliza
 	for _, item := range itemsReceived.Payload {
+		item.NumPoliza = strings.TrimSpace(item.NumPoliza)
 		if !existingSet[strings.ToLower(item.NumPoliza)] {
 			itemsToUpload = append(itemsToUpload, item)
 		}

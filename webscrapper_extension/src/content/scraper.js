@@ -25,7 +25,7 @@ export function capturePolizaDetails() {
   });
 
   return {
-    num_poliza: getText("ctl00_ContentPlaceHolder1_LbPoliza"),
+    num_poliza: getText("ctl00_ContentPlaceHolder1_LbPoliza")?.trim(),
     tipo_seguro: getText("ctl00_ContentPlaceHolder1_lbTSeguro"),
     fecha_emision: formatDateSlash(
       getText("ctl00_ContentPlaceHolder1_lbFInicio"),
@@ -72,7 +72,7 @@ export function getPolizasCount() {
 
 export function getPolizasIds() {
   const enlaces = document.querySelectorAll("a.ligas[id*='lnkPoliza']");
-  return Array.from(enlaces).map((elem) => elem.innerText);
+  return Array.from(enlaces).map((elem) => elem.innerText.trim());
 }
 
 export function getLastPendingPaymentDate() {
