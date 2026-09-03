@@ -158,7 +158,106 @@ export function getPolizaType() {
     btn.click();
     return "recibosaportaciones";
   }
-  return "historicoaportaciones";
+  if (btn.value === "Histórico de Aportaciones") {
+    btn.click();
+    return "historicoaportaciones";
+  }
+  return null;
+}
+
+// Lee la tabla de anualidades (GridPeriodos), incluyendo el "postback
+// target" de cada link "Ver detalle de anualidad" (extraido del href
+// javascript:__doPostBack('target','')) para que el background pueda
+// disparar ese postback directamente con __doPostBack en vez de simular un
+// click sobre el link.
+export function getFlexibleAnualidades() {
+  const periodoRows = Array.from(
+    document.querySelectorAll(
+      "#ctl00_ContentPlaceHolder1_GridPeriodos > tbody > tr.GridRow",
+    ),
+  );
+  if (periodoRows.length === 0) {
+    return { success: false, periodos: [] };
+  }
+
+  const periodos = periodoRows
+    .map((row) => {
+      // Los indices se toman de los <td> hijos directos de la fila (no via
+      // querySelector con :nth-child, que se evalua relativo al padre real
+      // de cada elemento en todo el documento, no relativo a "row").
+      const cells = Array.from(row.querySelectorAll(":scope > td"));
+      const desde = cells[2]?.innerText.trim();
+      const hasta = cells[3]?.innerText.trim();
+      const primaBasicaRaw = cells[4]?.innerText.trim();
+      const link = row.querySelector("a.ligas");
+      const hrefMatch = link
+        ?.getAttribute("href")
+        ?.match(/__doPostBack\('([^']+)'/);
+      return {
+        postbackTarget: hrefMatch ? hrefMatch[1] : null,
+        desde: desde ? formatDateSlash(desde) : null,
+        hasta: hasta ? formatDateSlash(hasta) : null,
+        prima_basica_udis: primaBasicaRaw
+          ? parseFloat(primaBasicaRaw.replace(/,/g, "")) || 0
+          : 0,
+      };
+    })
+    .filter((p) => p.desde && p.hasta && p.postbackTarget);
+
+  return { success: periodos.length > 0, periodos };
+}
+
+const FECHA_ISO_REGEX = /^\d{4}-\d{2}-\d{2}$/;
+
+// Lee los pagos (Importe UDI) de la anualidad actualmente desplegada en
+// GridIngresos. Dos cuidados clave con esta tabla:
+// 1. Se acota a "> tbody > tr.GridRow" (hijos directos) porque cada fila de
+//    pago trae anidada una tabla "ChildGrid" con su propio tr.GridRow para
+//    el detalle de deducibles - sin acotar, esas filas anidadas tambien
+//    caen en el querySelectorAll y corrompen la lectura.
+// 2. Los <td> de cada fila se toman como arreglo de hijos directos
+//    (":scope > td") y se indexan por posicion en JS, NUNCA con
+//    row.querySelector("td:nth-last-child(N)") - ese pseudo-selector se
+//    evalua relativo al padre REAL de cada <td> en todo el documento, asi
+//    que dentro de una fila con tabla anidada (ChildGrid), querySelector
+//    encuentra primero una celda de la tabla anidada que tambien cumple
+//    nth-last-child(N) relativo a SU propio padre, en vez de la celda real
+//    de la fila externa.
+// 3. La primera columna (icono "+" para expandir el deducible) SOLO existe
+//    en filas que tienen un deducible asociado - en filas sin deducible esa
+//    columna no se renderiza y todo se recorre una posicion. Por eso se
+//    indexa contando desde el final del arreglo de celdas, que es
+//    invariante a si esa columna existe o no.
+export function getFlexiblePagos() {
+  const table = document.getElementById("ctl00_ContentPlaceHolder1_GridIngresos");
+  const pagoRows = table
+    ? Array.from(table.querySelectorAll(":scope > tbody > tr.GridRow"))
+    : [];
+
+  const crudo = pagoRows.map((row) => {
+    const cells = Array.from(row.querySelectorAll(":scope > td"));
+    const fechaRaw = cells[cells.length - 8]?.innerText.trim();
+    const importeRaw = cells[cells.length - 4]?.innerText.trim();
+    return {
+      fecha: fechaRaw ? formatDateSlash(fechaRaw) : null,
+      importe_udi: importeRaw
+        ? parseFloat(importeRaw.replace(/,/g, "")) || 0
+        : 0,
+    };
+  });
+
+  const pagos = crudo.filter((p) => p.fecha && FECHA_ISO_REGEX.test(p.fecha));
+
+  return {
+    success: true,
+    pagos,
+    debug: {
+      url: location.href,
+      tablaEncontrada: !!table,
+      filasEncontradas: pagoRows.length,
+      crudo,
+    },
+  };
 }
 
 export function getPageAgentNumber() {

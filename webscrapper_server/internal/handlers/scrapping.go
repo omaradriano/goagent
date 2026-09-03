@@ -100,31 +100,35 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	const colsPerItem = 19
+	const colsPerItem = 20
 	var placeholders []string
 	var args []any
 
 	for i, item := range itemsToUpload {
 		base := i * colsPerItem
-		placeholders = append(placeholders, fmt.Sprintf(
-			"($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
-			base+1, base+2, base+3, base+4, base+5, base+6, base+7, base+8,
-			base+9, base+10, base+11, base+12, base+13, base+14, base+15,
-			base+16, base+17, base+18, base+19,
-		))
+		phs := make([]string, colsPerItem)
+		for j := 0; j < colsPerItem; j++ {
+			phs[j] = fmt.Sprintf("$%d", base+j+1)
+		}
+		placeholders = append(placeholders, "("+strings.Join(phs, ", ")+")")
+
+		tipoPoliza := item.TipoPoliza
+		if tipoPoliza == "" {
+			tipoPoliza = "TRADICIONAL"
+		}
 
 		args = append(args,
 			item.DiaCobro, item.Estatus, item.FechaEmision, item.FormaPago, item.MedioCobro,
 			item.NumPoliza, item.Plan, item.TipoSeguro, item.Direccion.Calle, item.Direccion.CodigoPostal,
 			item.Direccion.Ciudad, item.Direccion.Colonia, item.Direccion.Estado, item.Moneda,
-			item.Telefono, item.SumaAsegurada, item.Email, item.Pais, agenteID,
+			item.Telefono, item.SumaAsegurada, item.Email, item.Pais, agenteID, tipoPoliza,
 		)
 	}
 
 	queryStart := `INSERT INTO polizas (
 		dia_cobro, estatus, fecha_emision, forma_pago, medio_cobro, numpoliza, plan,
 		tipo_seguro, addr_calle, addr_codigopostal, addr_ciudad, addr_colonia,
-		addr_estado, moneda, telefono, suma_asegurada, email, pais, agente_id
+		addr_estado, moneda, telefono, suma_asegurada, email, pais, agente_id, tipo_poliza
 	) VALUES `
 	finalQuery := queryStart + strings.Join(placeholders, ",") + " RETURNING poliza_id, numpoliza"
 
@@ -181,6 +185,116 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 		)
 		if err != nil {
 			services.HandleResponseError(http.StatusConflict, "No se ha podido realizar la inserción de asegurados", w)
+			return
+		}
+	}
+
+	var flexPolizaIDs []int64
+	var flexPrimaBasica []float64
+	var flexDesde []time.Time
+	var flexHasta []time.Time
+
+	var pagoPolizaIDs []int64
+	var pagoFechas []time.Time
+	var pagoImportes []float64
+
+	var nextPaymentIDs []int64
+	var nextPaymentDates []time.Time
+
+	for _, item := range itemsToUpload {
+		if item.TipoPoliza != "FLEXIBLE" {
+			continue
+		}
+		polizaID, exists := polizasMap[strings.ToLower(item.NumPoliza)]
+		if !exists {
+			continue
+		}
+
+		if item.Flexible == nil {
+			// La extension no pudo capturar el detalle de aportaciones (ej.
+			// poliza recien emitida, aun sin tabla de anualidades del lado
+			// del asegurador). Se asegura igual una fila en
+			// polizas_payments_conf, estimando el primer pago como
+			// fecha_emision + un periodo, para que la poliza no desaparezca
+			// de los listados - el siguiente sync exitoso la corrige con
+			// datos reales.
+			fechaEmision, errEmision := time.Parse("2006-01-02", item.FechaEmision)
+			if errEmision != nil {
+				fechaEmision = time.Now()
+			}
+			nextPaymentIDs = append(nextPaymentIDs, polizaID)
+			nextPaymentDates = append(nextPaymentDates, services.PrimerPagoEstimado(fechaEmision, item.FormaPago))
+			continue
+		}
+
+		desde, errDesde := time.Parse("2006-01-02", item.Flexible.AnualidadDesde)
+		hasta, errHasta := time.Parse("2006-01-02", item.Flexible.AnualidadHasta)
+		if errDesde != nil || errHasta != nil {
+			fechaEmision, errEmision := time.Parse("2006-01-02", item.FechaEmision)
+			if errEmision != nil {
+				fechaEmision = time.Now()
+			}
+			nextPaymentIDs = append(nextPaymentIDs, polizaID)
+			nextPaymentDates = append(nextPaymentDates, services.PrimerPagoEstimado(fechaEmision, item.FormaPago))
+			continue
+		}
+
+		flexPolizaIDs = append(flexPolizaIDs, polizaID)
+		flexPrimaBasica = append(flexPrimaBasica, item.Flexible.PrimaBasicaUdis)
+		flexDesde = append(flexDesde, desde)
+		flexHasta = append(flexHasta, hasta)
+
+		var pagosUdis []float64
+		for _, pago := range item.Flexible.Pagos {
+			fechaPago, err := time.Parse("2006-01-02", pago.Fecha)
+			if err != nil {
+				continue
+			}
+			pagoPolizaIDs = append(pagoPolizaIDs, polizaID)
+			pagoFechas = append(pagoFechas, fechaPago)
+			pagoImportes = append(pagoImportes, pago.ImporteUdi)
+			pagosUdis = append(pagosUdis, pago.ImporteUdi)
+		}
+
+		cobertura := services.CalcularSiguientePago(item.Flexible.PrimaBasicaUdis, desde, hasta, item.FormaPago, pagosUdis)
+		nextPaymentIDs = append(nextPaymentIDs, polizaID)
+		nextPaymentDates = append(nextPaymentDates, cobertura.NextPayment)
+	}
+
+	if len(flexPolizaIDs) > 0 {
+		queryAnualidad := `
+			INSERT INTO polizas_flexible_anualidad (poliza_id, prima_basica_udis, anualidad_desde, anualidad_hasta)
+			SELECT * FROM UNNEST($1::bigint[], $2::numeric[], $3::timestamptz[], $4::timestamptz[]);`
+
+		_, err = tx.Exec(queryAnualidad,
+			pq.Array(flexPolizaIDs), pq.Array(flexPrimaBasica), pq.Array(flexDesde), pq.Array(flexHasta),
+		)
+		if err != nil {
+			services.HandleResponseError(http.StatusConflict, "No se ha podido guardar la anualidad de pólizas flexibles", w)
+			return
+		}
+	}
+
+	if len(pagoPolizaIDs) > 0 {
+		queryPagos := `
+			INSERT INTO polizas_flexible_pagos (poliza_id, fecha_pago, importe_udi)
+			SELECT * FROM UNNEST($1::bigint[], $2::timestamptz[], $3::numeric[]);`
+
+		_, err = tx.Exec(queryPagos, pq.Array(pagoPolizaIDs), pq.Array(pagoFechas), pq.Array(pagoImportes))
+		if err != nil {
+			services.HandleResponseError(http.StatusConflict, "No se ha podido guardar los pagos UDIS", w)
+			return
+		}
+	}
+
+	if len(nextPaymentIDs) > 0 {
+		queryNextPayment := `
+			INSERT INTO polizas_payments_conf (poliza_id, next_payment)
+			SELECT * FROM UNNEST($1::bigint[], $2::timestamptz[]);`
+
+		_, err = tx.Exec(queryNextPayment, pq.Array(nextPaymentIDs), pq.Array(nextPaymentDates))
+		if err != nil {
+			services.HandleResponseError(http.StatusConflict, "No se ha podido guardar el siguiente pago de pólizas flexibles", w)
 			return
 		}
 	}
@@ -252,6 +366,10 @@ func ApiPostPoliza(w http.ResponseWriter, r *http.Request) {
 
 	aid := int64(agenteID)
 	fechaEmision, _ := time.Parse("2006-01-02", item.FechaEmision)
+	tipoPoliza := item.TipoPoliza
+	if tipoPoliza == "" {
+		tipoPoliza = "TRADICIONAL"
+	}
 	poliza := &models.Poliza{
 		DiaCobro:         item.DiaCobro,
 		Estatus:          item.Estatus,
@@ -271,6 +389,7 @@ func ApiPostPoliza(w http.ResponseWriter, r *http.Request) {
 		SumaAsegurada:    &item.SumaAsegurada,
 		Email:            &item.Email,
 		Pais:             &item.Pais,
+		TipoPoliza:       tipoPoliza,
 		AgenteID:         &aid,
 	}
 
@@ -302,6 +421,83 @@ func ApiPostPoliza(w http.ResponseWriter, r *http.Request) {
 		}
 		err = deps.AseguradoRepo.Create(r.Context(), newAseg)
 		if err != nil {
+			services.Log.ErrorMessage(err.Error())
+			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+			return
+		}
+	}
+
+	if tipoPoliza == "FLEXIBLE" && item.Flexible == nil {
+		// La extension no pudo capturar el detalle de aportaciones (ej.
+		// poliza recien emitida, aun sin tabla de anualidades del lado del
+		// asegurador, o fallo de red/timing en el sitio origen). Igual se
+		// asegura una fila en polizas_payments_conf, estimando el primer
+		// pago como fecha_emision + un periodo, para que la poliza no
+		// desaparezca de los listados (que hacen JOIN contra esa tabla) - el
+		// siguiente sync exitoso la corrige con datos reales.
+		pid := int64(poliza.PolizaID)
+		nextPayment := services.PrimerPagoEstimado(fechaEmision, item.FormaPago)
+		if err := deps.PolizaRepo.UpsertNextPayment(r.Context(), pid, nextPayment); err != nil {
+			services.Log.ErrorMessage(err.Error())
+			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+			return
+		}
+	}
+
+	if tipoPoliza == "FLEXIBLE" && item.Flexible != nil {
+		desde, errDesde := time.Parse("2006-01-02", item.Flexible.AnualidadDesde)
+		hasta, errHasta := time.Parse("2006-01-02", item.Flexible.AnualidadHasta)
+		if errDesde != nil || errHasta != nil {
+			// Fechas invalidas en el payload capturado: no se aborta la
+			// respuesta (la poliza y sus asegurados ya se guardaron), solo se
+			// asegura la fila en polizas_payments_conf para que no desaparezca
+			// de los listados.
+			pid := int64(poliza.PolizaID)
+			nextPayment := services.PrimerPagoEstimado(fechaEmision, item.FormaPago)
+			if err := deps.PolizaRepo.UpsertNextPayment(r.Context(), pid, nextPayment); err != nil {
+				services.Log.ErrorMessage(err.Error())
+				services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+				return
+			}
+			services.HandleResponseSuccess(w)
+			return
+		}
+
+		pid := int64(poliza.PolizaID)
+		anualidad := &models.PolizaFlexibleAnualidad{
+			PolizaID:        &pid,
+			PrimaBasicaUdis: item.Flexible.PrimaBasicaUdis,
+			AnualidadDesde:  desde,
+			AnualidadHasta:  hasta,
+		}
+		if err := deps.PolizaFlexibleRepo.UpsertAnualidad(r.Context(), anualidad); err != nil {
+			services.Log.ErrorMessage(err.Error())
+			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+			return
+		}
+
+		var pagos []models.PolizaFlexiblePago
+		var pagosUdis []float64
+		for _, p := range item.Flexible.Pagos {
+			fecha, err := time.Parse("2006-01-02", p.Fecha)
+			if err != nil {
+				continue
+			}
+			pagos = append(pagos, models.PolizaFlexiblePago{
+				PolizaID:   &pid,
+				FechaPago:  fecha,
+				ImporteUdi: p.ImporteUdi,
+			})
+			pagosUdis = append(pagosUdis, p.ImporteUdi)
+		}
+		if err := deps.PolizaFlexibleRepo.ReplacePagos(r.Context(), pid, pagos); err != nil {
+			services.Log.ErrorMessage(err.Error())
+			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+			return
+		}
+
+		cobertura := services.CalcularSiguientePago(item.Flexible.PrimaBasicaUdis, desde, hasta, item.FormaPago, pagosUdis)
+		if err := deps.PolizaRepo.UpsertNextPayment(r.Context(), pid, cobertura.NextPayment); err != nil {
 			services.Log.ErrorMessage(err.Error())
 			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
 			return
@@ -478,7 +674,7 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 			COALESCE(p.addr_calle, 'No definido'), COALESCE(p.addr_codigopostal, '00000'),
 			COALESCE(p.addr_ciudad, 'No definido'), COALESCE(p.addr_colonia, 'No definido'),
 			COALESCE(p.addr_estado, 'No definido'), COALESCE(p.moneda, ''), COALESCE(p.pais, ''),
-			COALESCE(p.email, ''), COALESCE(p.telefono, ''), ppc.next_payment, p.poliza_id
+			COALESCE(p.email, ''), COALESCE(p.telefono, ''), ppc.next_payment, p.poliza_id, p.tipo_poliza
 		FROM polizas p
 		JOIN polizas_payments_conf ppc ON p.poliza_id = ppc.poliza_id
 		JOIN agentes a ON p.agente_id = a.agente_id
@@ -488,7 +684,7 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 		&cobranza.NumPoliza, &cobranza.Plan, &cobranza.TipoSeguro,
 		&cobranza.Direccion.Calle, &cobranza.Direccion.CodigoPostal, &cobranza.Direccion.Ciudad,
 		&cobranza.Direccion.Colonia, &cobranza.Direccion.Estado, &cobranza.Moneda, &cobranza.Pais,
-		&cobranza.Email, &cobranza.Telefono, &cobranza.SiguientePago, &polizaID)
+		&cobranza.Email, &cobranza.Telefono, &cobranza.SiguientePago, &polizaID, &cobranza.TipoPoliza)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			services.HandleResponseError(http.StatusNotFound, "La poliza no está registrada", w)
@@ -497,6 +693,35 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 		services.Log.ErrorMessage(err.Error())
 		services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
 		return
+	}
+
+	if cobranza.TipoPoliza == "FLEXIBLE" {
+		anualidad, pagos, err := deps.PolizaFlexibleRepo.GetByPolizaID(r.Context(), int64(polizaID))
+		if err != nil {
+			services.Log.ErrorMessage(err.Error())
+		} else if anualidad != nil {
+			var pagosUdis []float64
+			var pagosOut []dto.GetItem_PolizaFlexiblePago
+			for _, p := range pagos {
+				pagosUdis = append(pagosUdis, p.ImporteUdi)
+				pagosOut = append(pagosOut, dto.GetItem_PolizaFlexiblePago{
+					Fecha:      p.FechaPago.UTC().Format("2006-01-02"),
+					ImporteUdi: p.ImporteUdi,
+				})
+			}
+			cobertura := services.CalcularSiguientePago(
+				anualidad.PrimaBasicaUdis, anualidad.AnualidadDesde, anualidad.AnualidadHasta,
+				cobranza.FormaPago, pagosUdis,
+			)
+			cobranza.Flexible = &dto.GetItem_PolizaFlexible{
+				PrimaBasicaUdis: anualidad.PrimaBasicaUdis,
+				AnualidadDesde:  anualidad.AnualidadDesde.UTC().Format("2006-01-02"),
+				AnualidadHasta:  anualidad.AnualidadHasta.UTC().Format("2006-01-02"),
+				TotalPagadoUdis: cobertura.TotalPagadoUdis,
+				UdisFaltantes:   cobertura.UdisFaltantes,
+				Pagos:           pagosOut,
+			}
+		}
 	}
 
 	asegurados, err := deps.AseguradoRepo.FindByPolizaID(r.Context(), polizaID)
@@ -644,7 +869,8 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 			COALESCE(p.addr_estado, 'No definido'),
 			ppc.next_payment, COALESCE(p.moneda, ''), COALESCE(p.pais, ''),
 			COALESCE(p.telefono, ''), COALESCE(p.email, ''), COALESCE(p.suma_asegurada, ''),
-			p.last_modified, p.poliza_uuid, COALESCE(ppl.paid_period::text, '') as "payment_exist"` + baseQuery
+			p.last_modified, p.poliza_uuid, COALESCE(ppl.paid_period::text, '') as "payment_exist",
+			p.tipo_poliza` + baseQuery
 
 	orderBy := `ppc.next_payment ASC`
 	if recent {
@@ -673,7 +899,7 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 			&poliza.Plan, &poliza.TipoSeguro, &poliza.Direccion.Calle, &poliza.Direccion.CodigoPostal, &poliza.Direccion.Ciudad,
 			&poliza.Direccion.Colonia, &poliza.Direccion.Estado, &poliza.SiguientePago, &poliza.Moneda, &poliza.Pais,
 			&poliza.Telefono, &poliza.Email, &poliza.SumaAsegurada, &poliza.UltimaModificacion, &poliza.PolizaUUID,
-			&poliza.PaymentExist,
+			&poliza.PaymentExist, &poliza.TipoPoliza,
 		)
 		if err != nil {
 			rows.Close()
@@ -721,6 +947,48 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 		for i := range polizas {
 			if lista, exists := aseguradosMapa[polizas[i].NumPoliza]; exists {
 				polizas[i].Asegurados = lista
+			}
+		}
+
+		polizaIDs64 := make([]int64, len(targetPolizaIDs))
+		for i, id := range targetPolizaIDs {
+			polizaIDs64[i] = int64(id)
+		}
+
+		anualidades, pagosMap, err := deps.PolizaFlexibleRepo.GetByPolizaIDs(r.Context(), polizaIDs64)
+		if err != nil {
+			services.Log.ErrorMessage(err.Error())
+		} else {
+			for i := range polizas {
+				if polizas[i].TipoPoliza != "FLEXIBLE" {
+					continue
+				}
+				pid := int64(targetPolizaIDs[i])
+				anualidad, ok := anualidades[pid]
+				if !ok {
+					continue
+				}
+				var pagosUdis []float64
+				var pagosOut []dto.GetItem_PolizaFlexiblePago
+				for _, p := range pagosMap[pid] {
+					pagosUdis = append(pagosUdis, p.ImporteUdi)
+					pagosOut = append(pagosOut, dto.GetItem_PolizaFlexiblePago{
+						Fecha:      p.FechaPago.UTC().Format("2006-01-02"),
+						ImporteUdi: p.ImporteUdi,
+					})
+				}
+				cobertura := services.CalcularSiguientePago(
+					anualidad.PrimaBasicaUdis, anualidad.AnualidadDesde, anualidad.AnualidadHasta,
+					polizas[i].FormaPago, pagosUdis,
+				)
+				polizas[i].Flexible = &dto.GetItem_PolizaFlexible{
+					PrimaBasicaUdis: anualidad.PrimaBasicaUdis,
+					AnualidadDesde:  anualidad.AnualidadDesde.UTC().Format("2006-01-02"),
+					AnualidadHasta:  anualidad.AnualidadHasta.UTC().Format("2006-01-02"),
+					TotalPagadoUdis: cobertura.TotalPagadoUdis,
+					UdisFaltantes:   cobertura.UdisFaltantes,
+					Pagos:           pagosOut,
+				}
 			}
 		}
 	}

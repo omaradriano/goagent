@@ -29,12 +29,15 @@ type Poliza struct {
 	SumaAsegurada    *string    `gorm:"column:suma_asegurada;size:20" json:"suma_asegurada"`
 	Email            *string    `gorm:"column:email;size:50" json:"email"`
 	Pais             *string    `gorm:"column:pais;size:50" json:"pais"`
+	TipoPoliza       string     `gorm:"column:tipo_poliza;size:20;default:'TRADICIONAL'" json:"tipo_poliza"`
 	AgenteID         *int64     `gorm:"column:agente_id" json:"-"`
 
-	Agente      *Agente      `gorm:"foreignKey:AgenteID" json:"agente,omitempty"`
-	Asegurados  []Asegurado  `gorm:"foreignKey:PolizaID" json:"asegurados,omitempty"`
-	PaymentConf *PaymentConf `gorm:"foreignKey:PolizaID" json:"payment_conf,omitempty"`
-	PaymentLogs []PaymentLog `gorm:"foreignKey:PolizaID" json:"payment_logs,omitempty"`
+	Agente            *Agente                  `gorm:"foreignKey:AgenteID" json:"agente,omitempty"`
+	Asegurados        []Asegurado              `gorm:"foreignKey:PolizaID" json:"asegurados,omitempty"`
+	PaymentConf       *PaymentConf             `gorm:"foreignKey:PolizaID" json:"payment_conf,omitempty"`
+	PaymentLogs       []PaymentLog             `gorm:"foreignKey:PolizaID" json:"payment_logs,omitempty"`
+	FlexibleAnualidad *PolizaFlexibleAnualidad `gorm:"foreignKey:PolizaID" json:"flexible_anualidad,omitempty"`
+	FlexiblePagos     []PolizaFlexiblePago     `gorm:"foreignKey:PolizaID" json:"flexible_pagos,omitempty"`
 }
 
 func (Poliza) TableName() string { return "polizas" }

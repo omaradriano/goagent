@@ -14,6 +14,154 @@ export function handleInterruptSync(request, sender, sendResponse) {
   sendResponse({ success: true });
 }
 
+// La tabla de periodos (GridPeriodos) siempre lista las anualidades en orden
+// cronologico ascendente, asi que la ultima fila es la anualidad mas
+// reciente - la que hay que consultar. Se evita comparar fechas contra "hoy"
+// (traia bugs de zona horaria en el limite de cada anualidad).
+function pickCurrentAnualidad(periodos) {
+  if (!periodos || periodos.length === 0) return null;
+  return periodos[periodos.length - 1];
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Intenta pedir datos al content script varias veces: justo tras una
+// recarga el content script puede tardar un instante en reinyectarse y la
+// primera llamada puede fallar con "Receiving end does not exist".
+async function sendMessageWithRetries(tabId, message, attempts = 3, gapMs = 500) {
+  let lastError;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await chrome.tabs.sendMessage(tabId, message);
+    } catch (error) {
+      lastError = error;
+      if (i < attempts - 1) await delay(gapMs);
+    }
+  }
+  throw lastError;
+}
+
+// Dispara __doPostBack directamente en el contexto de la pagina (MAIN world),
+// igual que se hace para la paginacion de polizas (goToListPage). Es mas
+// confiable que simular un click sobre el link "Ver detalle de anualidad"
+// desde el content script: el postback ocurre siempre en la misma tarea de
+// ejecucion en la que el sitio lo espera, y no depende de que un evento de
+// click sintetico dispare correctamente un href "javascript:...".
+async function postBackTo(tabId, postbackTarget) {
+  await chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    args: [postbackTarget],
+    func: (target) => {
+      if (typeof __doPostBack === "function") {
+        __doPostBack(target, "");
+      }
+    },
+  });
+}
+
+// Navega a la anualidad vigente de una poliza flexible y devuelve el payload
+// "flexible" a enviar al backend (prima basica, periodo y pagos UDIS de esa
+// anualidad especifica). Nunca lanza, y trata de preservar lo maximo posible
+// de lo ya obtenido: si falla el postback o la lectura de pagos, igual
+// devuelve prima_basica/periodo (con pagos vacio) en vez de null completo,
+// para que el backend pueda al menos registrar la poliza flexible.
+async function captureFlexiblePayload(tabId) {
+  let periodosRes;
+  try {
+    periodosRes = await sendMessageWithRetries(tabId, {
+      action: "get-flexible-anualidades",
+    });
+  } catch (error) {
+    console.error(
+      "[GoAgent][sync] fallo al leer periodos (GridPeriodos) de poliza flexible",
+      error,
+    );
+    return null;
+  }
+
+  if (!periodosRes?.success || periodosRes.data.periodos.length === 0) {
+    console.warn(
+      "[GoAgent][sync] no se encontraron periodos de anualidad para poliza flexible",
+    );
+    return null;
+  }
+
+  const actual = pickCurrentAnualidad(periodosRes.data.periodos);
+  if (!actual) return null;
+
+  const base = {
+    prima_basica_udis: actual.prima_basica_udis,
+    anualidad_desde: actual.desde,
+    anualidad_hasta: actual.hasta,
+    pagos: [],
+  };
+
+  const maxPostbackAttempts = 3;
+  for (let attempt = 1; attempt <= maxPostbackAttempts; attempt++) {
+    const t0 = Date.now();
+    try {
+      await postBackTo(tabId, actual.postbackTarget);
+    } catch (error) {
+      console.error(
+        `[GoAgent][sync] intento ${attempt}/${maxPostbackAttempts}: fallo al disparar postback de anualidad`,
+        error,
+      );
+      continue;
+    }
+
+    await waitForTabLoad(tabId);
+
+    // Si el postback cayo en una pagina de error de red/proxy (ej. "no
+    // healthy upstream" del backend del asegurador), la pestana termina en
+    // una URL que no matchea el sitio real - el content script nunca se
+    // inyecta ahi y no hay forma de leer nada por mucho que se espere.
+    let tabUrl = null;
+    try {
+      tabUrl = (await chrome.tabs.get(tabId)).url;
+    } catch (error) {
+      // tab pudo cerrarse; se maneja abajo con la falla de sendMessage
+    }
+    const urlOk = tabUrl && tabUrl.includes("lineamonterrey.com.mx");
+    console.log(
+      `[GoAgent][sync] intento ${attempt}/${maxPostbackAttempts}: tab "complete" a los ${Date.now() - t0}ms, url=${tabUrl}`,
+    );
+
+    if (!urlOk) {
+      console.warn(
+        `[GoAgent][sync] intento ${attempt}/${maxPostbackAttempts}: la pagina no aterrizo en el sitio esperado tras el postback (posible falla de red/proxy del lado del asegurador), reintentando`,
+      );
+      continue;
+    }
+
+    try {
+      const pagosRes = await sendMessageWithRetries(
+        tabId,
+        { action: "get-flexible-pagos" },
+        6,
+        1000,
+      );
+      console.log(
+        `[GoAgent][sync] pagos de anualidad leidos a los ${Date.now() - t0}ms (intento ${attempt})`,
+        pagosRes?.data?.debug,
+      );
+      return { ...base, pagos: pagosRes?.success ? pagosRes.data.pagos : [] };
+    } catch (error) {
+      console.error(
+        `[GoAgent][sync] intento ${attempt}/${maxPostbackAttempts}: fallo al leer pagos (GridIngresos) tras ${Date.now() - t0}ms (url=${tabUrl})`,
+        error,
+      );
+    }
+  }
+
+  console.error(
+    "[GoAgent][sync] no se pudieron leer los pagos de la poliza flexible tras varios intentos de postback",
+  );
+  return base;
+}
+
 async function goToListPage(tabId, targetPage) {
   await chrome.tabs.update(tabId, { url: LIST_PAGE_URL });
   await waitForTabLoad(tabId);
@@ -79,6 +227,12 @@ export async function handlePostUniqueDb(request, sender, sendResponse) {
       });
       request.payload.ultimo_pago =
         recibosRes.data.last_payment ?? "No definido";
+      request.payload.tipo_poliza = "TRADICIONAL";
+    } else if (checkType.data.poliza_type_res === "historicoaportaciones") {
+      await waitForTabLoad(request.tab);
+      request.payload.ultimo_pago = "No definido";
+      request.payload.tipo_poliza = "FLEXIBLE";
+      request.payload.flexible = await captureFlexiblePayload(request.tab);
     } else {
       request.payload.ultimo_pago = "No definido";
     }
@@ -227,6 +381,14 @@ export async function handlePostAllDb(request, sender, sendResponse) {
           });
           scrapeRes.payload.ultimo_pago =
             recibosRes.data.last_payment ?? "No definido";
+          scrapeRes.payload.tipo_poliza = "TRADICIONAL";
+        } else if (typeCheck.data.poliza_type_res === "historicoaportaciones") {
+          await waitForTabLoad(hiddenTab.id);
+          scrapeRes.payload.ultimo_pago = "No definido";
+          scrapeRes.payload.tipo_poliza = "FLEXIBLE";
+          scrapeRes.payload.flexible = await captureFlexiblePayload(
+            hiddenTab.id,
+          );
         } else {
           scrapeRes.payload.ultimo_pago = "No definido";
         }

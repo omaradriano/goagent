@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/omaradriano/cobranzawebscrapper_server/internal/models"
 	"gorm.io/gorm"
@@ -43,6 +44,7 @@ type PolizaRepository interface {
 	GetBirthdates(ctx context.Context, agenteID int) ([]BirthdateResult, error)
 	UpdatePolizaFields(ctx context.Context, numPoliza string, agenteID int, fields map[string]interface{}, auditRepo AuditRepository) error
 	UpdatePolizaFieldsByID(ctx context.Context, polizaID int, fields map[string]interface{}, changedBy int, auditRepo AuditRepository) error
+	UpsertNextPayment(ctx context.Context, polizaID int64, nextPayment time.Time) error
 }
 
 type polizaRepository struct {
@@ -228,7 +230,7 @@ func (r *polizaRepository) UpdatePolizaFields(ctx context.Context, numPoliza str
 	}
 
 	oldFields := map[string]string{
-		"dia_cobro": fmt.Sprintf("%d", poliza.DiaCobro),
+		"dia_cobro":  fmt.Sprintf("%d", poliza.DiaCobro),
 		"forma_pago": poliza.FormaPago,
 		"estatus":    poliza.Estatus,
 	}
@@ -307,6 +309,27 @@ func (r *polizaRepository) UpdatePolizaFieldsByID(ctx context.Context, polizaID 
 	}
 
 	return nil
+}
+
+// UpsertNextPayment crea o actualiza la fila de polizas_payments_conf para una
+// poliza. polizas_payments_conf no tiene constraint UNIQUE en poliza_id (el
+// procedimiento SQL fn__set_next_payment tampoco confia en uno), por lo que se
+// hace un check-then-branch manual en vez de ON CONFLICT.
+func (r *polizaRepository) UpsertNextPayment(ctx context.Context, polizaID int64, nextPayment time.Time) error {
+	var existing models.PaymentConf
+	err := r.db.WithContext(ctx).Where("poliza_id = ?", polizaID).First(&existing).Error
+	if err == nil {
+		return r.db.WithContext(ctx).
+			Model(&models.PaymentConf{}).
+			Where("poliza_id = ?", polizaID).
+			Update("next_payment", nextPayment).Error
+	}
+	if err != gorm.ErrRecordNotFound {
+		return err
+	}
+
+	pid := polizaID
+	return r.db.WithContext(ctx).Create(&models.PaymentConf{PolizaID: &pid, NextPayment: &nextPayment}).Error
 }
 
 func (r *polizaRepository) GetBirthdates(ctx context.Context, agenteID int) ([]BirthdateResult, error) {

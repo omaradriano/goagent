@@ -44,14 +44,8 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
             <div>
               <CounterCard
                 parentContainer="Row"
-                includePayment={data.payment_exist === "" ? false : true}
                 label={"Días para corte"}
                 count={calculateDaysUntilLimit(data.next_payment)}
-                paymentdata={{
-                  poliza: data.poliza_uuid,
-                  paid_period: data.next_payment,
-                  num_poliza: data.num_poliza,
-                }}
               ></CounterCard>
 
               {/* <ScrollCheckbox active={data.allownotifications} /> */}
@@ -86,13 +80,7 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
           <NotificationDiv>
             <CounterCard
               parentContainer="Row"
-              includePayment={data.payment_exist === "" ? false : true}
               count={calculateDaysUntilLimit(data.next_payment)}
-              paymentdata={{
-                poliza: data.poliza_uuid,
-                paid_period: data.next_payment,
-                num_poliza: data.num_poliza,
-              }}
             ></CounterCard>
             {/* <ScrollCheckbox active={data.allownotifications} action={()=>{
               // notificationsNotifier.stateAction

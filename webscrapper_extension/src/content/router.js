@@ -5,6 +5,8 @@ import {
   getPolizasIds,
   getLastPendingPaymentDate,
   getPolizaType,
+  getFlexibleAnualidades,
+  getFlexiblePagos,
   getPageAgentNumber,
   getPagerInfo,
 } from "./scraper.js";
@@ -28,6 +30,8 @@ const handlers = {
   "delete-notification": handleDeleteNotification,
   "get-recibos-last-payment": handleGetRecibosLastPayment,
   "get-poliza-type": handleGetPolizaType,
+  "get-flexible-anualidades": handleGetFlexibleAnualidades,
+  "get-flexible-pagos": handleGetFlexiblePagos,
 };
 
 export function setupContentRouter() {
@@ -153,5 +157,25 @@ function handleGetPolizaType(request, sender, sendResponse) {
   sendResponse({
     success: polizaType !== null,
     data: { poliza_type_res: polizaType },
+  });
+}
+
+function handleGetFlexibleAnualidades(request, sender, sendResponse) {
+  const result = getFlexibleAnualidades();
+  sendResponse({
+    success: result.success,
+    data: { periodos: result.periodos },
+    message: result.success
+      ? "Se han obtenido los periodos de la poliza"
+      : "No se encontraron periodos de anualidad",
+  });
+}
+
+function handleGetFlexiblePagos(request, sender, sendResponse) {
+  const result = getFlexiblePagos();
+  sendResponse({
+    success: result.success,
+    data: { pagos: result.pagos, debug: result.debug },
+    message: "Se han obtenido los pagos de la anualidad",
   });
 }

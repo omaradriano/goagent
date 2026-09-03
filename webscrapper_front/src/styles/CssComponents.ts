@@ -1,6 +1,6 @@
 import styled, { css } from "styled-components";
 import type { PreferedScheme } from "../Context/ContextConfig";
-import type { CardType, StatusValues } from "../Types/types";
+import type { CardType, StatusValues, PolizaTipoValues } from "../Types/types";
 
 export const textResponsive__css = css`
   font-size: clamp(14px, 1.5vw, 1.2rem);
@@ -96,6 +96,28 @@ export const CardTheme__CSS = css<{ $type: StatusValues }>`
   background-color: ${(p) =>
     p.$type === "En Vigor" ? "var(--sc-success-bg)" : "var(--sc-danger-bg)"};
   ${spanTheme__css}
+`;
+
+export const TipoPolizaTheme__CSS = css<{ $type: PolizaTipoValues }>`
+  background-color: ${(p) =>
+    p.$type === "FLEXIBLE" ? "var(--sc-warning-bg)" : "var(--sc-default-bg)"};
+  ${(p) =>
+    p.theme.mode === "Dark"
+      ? `--sc-warning-bg: var(--sc-warning-bg-dark);
+         --sc-default-bg: var(--sc-default-bg-dark);`
+      : null}
+`;
+
+export const TipoPolizaTextTheme__CSS = css<{ $type: PolizaTipoValues }>`
+  color: ${(p) =>
+    p.$type === "FLEXIBLE"
+      ? "var(--sc-warning-color)"
+      : "var(--sc-default-color)"};
+  ${(p) =>
+    p.theme.mode === "Dark"
+      ? `--sc-warning-color: var(--sc-warning-color-dark);
+         --sc-default-color: var(--sc-default-color-dark);`
+      : null}
 `;
 
 export const getSuccessBgByTheme = ($scheme: PreferedScheme) =>

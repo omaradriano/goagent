@@ -24,10 +24,23 @@ export type PolizaGetItem = {
   };
   next_payment: string;
   poliza_uuid: string;
-  payment_exist: string
+  payment_exist: string;
+  tipo_poliza: PolizaTipoValues;
+  flexible?: PolizaFlexible;
 };
 
 export type StatusValues = "En Vigor" | "Anulada";
+
+export type PolizaTipoValues = "TRADICIONAL" | "FLEXIBLE";
+
+export type PolizaFlexible = {
+  prima_basica_udis: number;
+  anualidad_desde: string;
+  anualidad_hasta: string;
+  total_pagado_udis: number;
+  udis_faltantes: number;
+  pagos?: { fecha: string; importe_udi: number }[];
+};
 
 export type viewMode = "Mobile" | "Desktop";
 

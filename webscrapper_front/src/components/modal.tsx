@@ -5,6 +5,8 @@ import Icon from "./icon";
 import {
   CardTextTheme__CSS,
   CardTheme__CSS,
+  TipoPolizaTextTheme__CSS,
+  TipoPolizaTheme__CSS,
   sectionBorderTheme__css,
   sectionTheme__css,
   textTheme__css,
@@ -65,6 +67,7 @@ const Modal: React.FC<ModalProps> = ({
   // Use a key to force remount and reset state when polizaData or modalOpen changes
   const [editFields, setEditFields] =
     useState<EditableFields>(getInitialFields());
+  const [showPagos, setShowPagos] = useState(false);
   const auth = useContext(AuthContext);
   const alertContext = useContext(AlertContext);
   const dataChanged = useContext(DataChangedContext);
@@ -74,6 +77,7 @@ const Modal: React.FC<ModalProps> = ({
 
   useEffect(() => {
     setEditFields(getInitialFields());
+    setShowPagos(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [polizaData, modalOpen]);
 
@@ -209,6 +213,11 @@ const Modal: React.FC<ModalProps> = ({
                   </div>
                 </HeaderLeft>
                 <HeaderRight>
+                  <TipoPolizaBadge $type={polizaData.tipo_poliza}>
+                    {polizaData.tipo_poliza === "FLEXIBLE"
+                      ? "Flexible"
+                      : "Tradicional"}
+                  </TipoPolizaBadge>
                   <StatusBadge $type={editFields.estatus}>
                     {editFields.estatus}
                   </StatusBadge>
@@ -225,14 +234,6 @@ const Modal: React.FC<ModalProps> = ({
                   <CounterCard
                     parentContainer={"Modal"}
                     count={calculateDaysUntilLimit(polizaData.next_payment)}
-                    includePayment={
-                      polizaData.payment_exist === "" ? false : true
-                    }
-                    paymentdata={{
-                      poliza: polizaData.poliza_uuid,
-                      paid_period: polizaData.next_payment,
-                      num_poliza: polizaData.num_poliza,
-                    }}
                   />
                   <SectionMeta>
                     <MetaItem>
@@ -362,6 +363,86 @@ const Modal: React.FC<ModalProps> = ({
                     </Field>
                   </FieldGrid>
                 </SectionGroup>
+
+                {polizaData.tipo_poliza === "FLEXIBLE" && polizaData.flexible && (
+                  <>
+                    <Divider />
+                    <SectionGroup>
+                      <SectionLabel>Cobertura de aportaciones (UDIS)</SectionLabel>
+                      <FieldGrid>
+                        <Field>
+                          <FieldLabel>Prima básica</FieldLabel>
+                          <FieldValue>
+                            {polizaData.flexible.prima_basica_udis.toFixed(2)}{" "}
+                            UDIS
+                          </FieldValue>
+                        </Field>
+                        <Field>
+                          <FieldLabel>Anualidad desde</FieldLabel>
+                          <FieldValue>
+                            {formatDate(polizaData.flexible.anualidad_desde)}
+                          </FieldValue>
+                        </Field>
+                        <Field>
+                          <FieldLabel>Anualidad hasta</FieldLabel>
+                          <FieldValue>
+                            {formatDate(polizaData.flexible.anualidad_hasta)}
+                          </FieldValue>
+                        </Field>
+                        <Field>
+                          <FieldLabel>Total pagado</FieldLabel>
+                          <FieldValue>
+                            {polizaData.flexible.total_pagado_udis.toFixed(2)}{" "}
+                            UDIS
+                          </FieldValue>
+                        </Field>
+                        {polizaData.flexible.udis_faltantes > 0 && (
+                          <FullWidthField>
+                            <FieldLabel>Estado del periodo actual</FieldLabel>
+                            <FieldValue>
+                              Faltan{" "}
+                              {polizaData.flexible.udis_faltantes.toFixed(2)}{" "}
+                              UDIS para completar el periodo actual
+                            </FieldValue>
+                          </FullWidthField>
+                        )}
+                      </FieldGrid>
+                      {polizaData.flexible.pagos &&
+                        polizaData.flexible.pagos.length > 0 && (
+                          <PagosDisclosure>
+                            <PagosToggle
+                              type="button"
+                              onClick={() => setShowPagos((prev) => !prev)}
+                            >
+                              <span>
+                                Historial de pagos (
+                                {polizaData.flexible.pagos.length})
+                              </span>
+                              <Icon
+                                iconName={
+                                  showPagos ? "ExpandLess" : "ExpandMore"
+                                }
+                                size={18}
+                                isButton={false}
+                              />
+                            </PagosToggle>
+                            {showPagos && (
+                              <PagosList>
+                                {polizaData.flexible.pagos.map((pago, i) => (
+                                  <PagoRow key={i}>
+                                    <span>{formatDate(pago.fecha)}</span>
+                                    <span>
+                                      {pago.importe_udi.toFixed(2)} UDIS
+                                    </span>
+                                  </PagoRow>
+                                ))}
+                              </PagosList>
+                            )}
+                          </PagosDisclosure>
+                        )}
+                    </SectionGroup>
+                  </>
+                )}
 
                 <Divider />
 
@@ -529,6 +610,16 @@ const StatusBadge = styled.span<{ $type: StatusValues }>`
   ${CardTextTheme__CSS}
 `;
 
+const TipoPolizaBadge = styled.span<{ $type: PolizaGetItem["tipo_poliza"] }>`
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+  ${TipoPolizaTheme__CSS}
+  ${TipoPolizaTextTheme__CSS}
+`;
+
 const CloseBtn = styled.button`
   display: flex;
   align-items: center;
@@ -675,6 +766,52 @@ const FieldLabel = styled.span`
 const FieldValue = styled.span`
   font-size: 13px;
   font-weight: 500;
+  ${textTheme__css}
+`;
+
+/* ─── Pagos UDIS (pólizas flexibles) ──────────────────────────── */
+const PagosDisclosure = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`;
+
+const PagosToggle = styled.button`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 6px 2px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  ${textTheme__css}
+
+  &:hover {
+    opacity: 0.8;
+  }
+`;
+
+const PagosList = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+`;
+
+const PagoRow = styled.div`
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  font-size: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background-color: ${(p) =>
+    p.theme.mode === "Dark" ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.02)"};
   ${textTheme__css}
 `;
 

@@ -68,10 +68,6 @@ func NewRouter() http.Handler {
 
 			// Calendario de cumpleaños
 			r.Get("/polizas/birthdates", handlers.ApiGetBirthdates)
-
-			// Pagos
-			r.Patch("/payments/poliza", handlers.ApiSetPayment)
-
 		})
 	})
 

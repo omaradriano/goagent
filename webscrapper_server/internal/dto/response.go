@@ -35,6 +35,23 @@ type GetItem_Poliza struct {
 
 	SiguientePago string `json:"next_payment"`
 	PolizaUUID    string `json:"poliza_uuid"`
+	TipoPoliza    string `json:"tipo_poliza"`
+
+	Flexible *GetItem_PolizaFlexible `json:"flexible,omitempty"`
+}
+
+type GetItem_PolizaFlexiblePago struct {
+	Fecha      string  `json:"fecha"`
+	ImporteUdi float64 `json:"importe_udi"`
+}
+
+type GetItem_PolizaFlexible struct {
+	PrimaBasicaUdis float64                      `json:"prima_basica_udis"`
+	AnualidadDesde  string                       `json:"anualidad_desde"`
+	AnualidadHasta  string                       `json:"anualidad_hasta"`
+	TotalPagadoUdis float64                      `json:"total_pagado_udis"`
+	UdisFaltantes   float64                      `json:"udis_faltantes"`
+	Pagos           []GetItem_PolizaFlexiblePago `json:"pagos,omitempty"`
 }
 
 type Asegurado struct {
