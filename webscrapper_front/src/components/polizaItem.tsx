@@ -33,6 +33,8 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
   setPolizaData,
   // notificationsNotifier
 }) => {
+  const principal =
+    data.asegurados.find((a) => a.is_principal) ?? data.asegurados[0];
 
   // console.log(data);
   return (
@@ -55,7 +57,7 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
             <MinorText>Producto:</MinorText>
             <NormalText>{data.tipo_seguro}</NormalText>
             <MinorText>ASegurado principal:</MinorText>
-            <NormalText>{data.asegurados[0]?.nombre}</NormalText>
+            <NormalText>{principal?.nombre}</NormalText>
           </div>
           <PolizaItemFooter>
             <SpanCard title={data.estatus}></SpanCard>
@@ -72,7 +74,7 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
       ) : (
         <PolizaItemCustom $viewMode={viewMode}>
           <p>{data.num_poliza}</p>
-          <p>{data.asegurados[0]?.nombre}</p>
+          <p>{principal?.nombre}</p>
           <p>{data.tipo_seguro}</p>
           <div>
             <SpanCard title={data.estatus as StatusValues} />
