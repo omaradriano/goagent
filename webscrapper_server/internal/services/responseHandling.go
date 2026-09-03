@@ -144,6 +144,7 @@ func CORSMiddleware(next http.Handler) http.Handler {
 			origin == "http://localhost:5174" ||
 			origin == "https://www.goagent.com.mx" ||
 			origin == "https://goagent.com.mx" ||
+			origin == "https://cobranzaswebscrapper-front-git-qa-omaradrianos-projects.vercel.app" ||
 			origin == "chrome-extension://bnhggcmlbinhmheijhmlfjoefgldkpdp" ||
 			origin == "chrome-extension://jgahlmealgaocieaemladngafmbbfgdo" ||
 			origin == "chrome-extension://acihafkligkgjbhmbgaidkackhojbokh" {
