@@ -117,7 +117,6 @@ const HeroCTAGroup = styled.div`
   justify-content: center;
 `;
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const PrimaryButton = styled(NavLink)`
   display: inline-flex;
   align-items: center;
@@ -383,13 +382,6 @@ const StepDivider = styled.div`
 `;
 
 // ── TESTIMONIAL / QUOTE ───────────────────────────────────────────────────────
-const QuoteSection = styled.section`
-  max-width: 800px;
-  margin: 0 auto;
-  padding: 5rem 1.5rem;
-  text-align: center;
-`;
-
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const QuoteText = styled.blockquote`
   font-size: clamp(1.4rem, 3vw, 2.2rem);

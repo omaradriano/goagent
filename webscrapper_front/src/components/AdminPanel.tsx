@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useCallback, useContext, useEffect, useState } from "react";
 import styled from "styled-components";
 import { AuthContext } from "../Context/ContextConfig";
 import {
@@ -43,30 +43,28 @@ const AdminPanel: React.FC = () => {
 
   const LIMIT = 20;
 
-  async function fetchAudit(endpoint: string, offset: number) {
-    const token = localStorage.getItem("session_jwt");
-    if (!token) {
-      auth?.setIsAuthenticated(false);
-      navigate("/home");
-      return null;
-    }
-    try {
-      const res = await fetch(
-        `${import.meta.env.VITE_API_SERVER_URL}/v1/audit/all/${endpoint}?limit=${LIMIT}&offset=${offset}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      const data = await res.json();
-      if (data.success) return data.payload || [];
-      return [];
-    } catch {
-      return [];
-    }
-  }
-
-  async function loadPolizaLogs() {
-    const p = await fetchAudit("polizas", polizaOffset);
-    if (p) setPolizaLogs(p);
-  }
+  const fetchAudit = useCallback(
+    async (endpoint: string, offset: number) => {
+      const token = localStorage.getItem("session_jwt");
+      if (!token) {
+        auth?.setIsAuthenticated(false);
+        navigate("/home");
+        return null;
+      }
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_API_SERVER_URL}/v1/audit/all/${endpoint}?limit=${LIMIT}&offset=${offset}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const data = await res.json();
+        if (data.success) return data.payload || [];
+        return [];
+      } catch {
+        return [];
+      }
+    },
+    [auth, navigate]
+  );
 
   useEffect(() => {
     async function load() {
@@ -80,7 +78,7 @@ const AdminPanel: React.FC = () => {
       setLoading(false);
     }
     load();
-  }, [polizaOffset, agenteOffset]);
+  }, [polizaOffset, agenteOffset, fetchAudit]);
 
   function formatDate(iso: string) {
     const d = new Date(iso);

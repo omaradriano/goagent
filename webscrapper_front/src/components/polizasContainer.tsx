@@ -27,11 +27,15 @@ const PolizasContainer: React.FC<PolizasContainerProps> = ({
   const { isOpen, setIsOpen, polizaData, setPolizaData } = useModalState(false);
   // const { showAlert, setShowAlert, alertData, setAlertData } = useModalAlert(false);
 
+  // Solo debe re-sincronizar el modal abierto cuando "data" se refresca, no
+  // cada vez que isOpen/polizaData cambian (eso ya lo maneja quien abre el
+  // modal) - mismo patron ya usado en modal.tsx.
   useEffect(() => {
     if (isOpen && polizaData.num_poliza) {
       const updated = data.find((p) => p.num_poliza === polizaData.num_poliza);
       if (updated) setPolizaData(updated);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
 
   useEffect(() => {
