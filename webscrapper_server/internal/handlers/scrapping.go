@@ -717,8 +717,14 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 			// mismos datos que el resto de la seccion de cobertura, en vez de
 			// depender del valor guardado en polizas_payments_conf (que solo
 			// se actualiza en el siguiente sync) - evita que ambos se vean
-			// desalineados cuando se ajusta la formula de calculo.
+			// desalineados cuando se ajusta la formula de calculo. Tambien se
+			// reescribe el valor guardado para que el ORDER BY del listado
+			// (que si usa la columna guardada) quede correcto la proxima vez
+			// que se cargue - no bloquea la respuesta si falla.
 			cobranza.SiguientePago = cobertura.NextPayment.UTC().Format(time.RFC3339)
+			if err := deps.PolizaRepo.UpsertNextPayment(r.Context(), int64(polizaID), cobertura.NextPayment); err != nil {
+				services.Log.ErrorMessage(err.Error())
+			}
 			cobranza.Flexible = &dto.GetItem_PolizaFlexible{
 				PrimaBasicaUdis: anualidad.PrimaBasicaUdis,
 				AnualidadDesde:  anualidad.AnualidadDesde.UTC().Format("2006-01-02"),
@@ -989,8 +995,13 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 					polizas[i].FormaPago, pagosUdis, polizas[i].DiaCobro,
 				)
 				// Mismo criterio que ApiGetPoliza: para flexibles se muestra
-				// el next_payment calculado en vivo, no el guardado en BD.
+				// el next_payment calculado en vivo, no el guardado en BD, y
+				// se reescribe el guardado para que el ORDER BY del listado
+				// quede correcto la proxima vez que se cargue.
 				polizas[i].SiguientePago = cobertura.NextPayment.UTC().Format(time.RFC3339)
+				if err := deps.PolizaRepo.UpsertNextPayment(r.Context(), pid, cobertura.NextPayment); err != nil {
+					services.Log.ErrorMessage(err.Error())
+				}
 				polizas[i].Flexible = &dto.GetItem_PolizaFlexible{
 					PrimaBasicaUdis: anualidad.PrimaBasicaUdis,
 					AnualidadDesde:  anualidad.AnualidadDesde.UTC().Format("2006-01-02"),
