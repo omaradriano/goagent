@@ -20,6 +20,13 @@ var pagosPorAnioFormaPago = map[string]int{
 	"ANUAL":      1,
 }
 
+// toleranciaUdis perdona hasta esta cantidad de UDIS de deficit al evaluar
+// si un periodo esta cubierto - pequenas diferencias de redondeo del tipo de
+// cambio UDIS/MXN entre pagos (ej. 234.90 vs 234.94 UDIS en depositos que
+// deberian ser identicos) no deben dejar un periodo marcado como incompleto.
+// Un sobrepago ya avanza el periodo correctamente sin necesitar este ajuste.
+const toleranciaUdis = 5.0
+
 // ajustarFinDeSemana traslada una fecha que cae en fin de semana al
 // siguiente dia habil, igual que fn__set_next_payment/fn_trigger_after_*
 // hacen para las polizas tradicionales: sabado se recorre 2 dias (a lunes),
@@ -76,7 +83,7 @@ func CalcularSiguientePago(primaBasica float64, desde, hasta time.Time, formaPag
 
 	periodosCompletos := 0
 	if pagoEsperado > 0 {
-		periodosCompletos = int(math.Floor(totalPagado / pagoEsperado))
+		periodosCompletos = int(math.Floor((totalPagado + toleranciaUdis) / pagoEsperado))
 	}
 	if periodosCompletos > n {
 		periodosCompletos = n
