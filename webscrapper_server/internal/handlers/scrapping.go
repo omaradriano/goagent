@@ -713,12 +713,19 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 				anualidad.PrimaBasicaUdis, anualidad.AnualidadDesde, anualidad.AnualidadHasta,
 				cobranza.FormaPago, pagosUdis, cobranza.DiaCobro,
 			)
+			// Para flexibles, "siguiente pago" se calcula en vivo con los
+			// mismos datos que el resto de la seccion de cobertura, en vez de
+			// depender del valor guardado en polizas_payments_conf (que solo
+			// se actualiza en el siguiente sync) - evita que ambos se vean
+			// desalineados cuando se ajusta la formula de calculo.
+			cobranza.SiguientePago = cobertura.NextPayment.UTC().Format(time.RFC3339)
 			cobranza.Flexible = &dto.GetItem_PolizaFlexible{
 				PrimaBasicaUdis: anualidad.PrimaBasicaUdis,
 				AnualidadDesde:  anualidad.AnualidadDesde.UTC().Format("2006-01-02"),
 				AnualidadHasta:  anualidad.AnualidadHasta.UTC().Format("2006-01-02"),
 				TotalPagadoUdis: cobertura.TotalPagadoUdis,
 				UdisFaltantes:   cobertura.UdisFaltantes,
+				EsperadoHoyUdis: cobertura.EsperadoALaFechaUdis,
 				Pagos:           pagosOut,
 			}
 		}
@@ -981,12 +988,16 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 					anualidad.PrimaBasicaUdis, anualidad.AnualidadDesde, anualidad.AnualidadHasta,
 					polizas[i].FormaPago, pagosUdis, polizas[i].DiaCobro,
 				)
+				// Mismo criterio que ApiGetPoliza: para flexibles se muestra
+				// el next_payment calculado en vivo, no el guardado en BD.
+				polizas[i].SiguientePago = cobertura.NextPayment.UTC().Format(time.RFC3339)
 				polizas[i].Flexible = &dto.GetItem_PolizaFlexible{
 					PrimaBasicaUdis: anualidad.PrimaBasicaUdis,
 					AnualidadDesde:  anualidad.AnualidadDesde.UTC().Format("2006-01-02"),
 					AnualidadHasta:  anualidad.AnualidadHasta.UTC().Format("2006-01-02"),
 					TotalPagadoUdis: cobertura.TotalPagadoUdis,
 					UdisFaltantes:   cobertura.UdisFaltantes,
+					EsperadoHoyUdis: cobertura.EsperadoALaFechaUdis,
 					Pagos:           pagosOut,
 				}
 			}

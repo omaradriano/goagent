@@ -44,6 +44,22 @@ const Modal: React.FC<ModalProps> = ({
   const principal = polizaData?.asegurados?.filter((a) => a.is_principal)[0];
   const dependientes = polizaData?.asegurados?.filter((a) => !a.is_principal);
 
+  const flex = polizaData?.flexible;
+  const TOLERANCIA_UDIS = 5;
+  const coberturaDelta = flex
+    ? flex.total_pagado_udis - flex.esperado_hoy_udis
+    : 0;
+  const coberturaEstado: StatusValues =
+    coberturaDelta < -TOLERANCIA_UDIS ? "Anulada" : "En Vigor";
+  const coberturaFillPct =
+    flex && flex.prima_basica_udis > 0
+      ? Math.min(100, (flex.total_pagado_udis / flex.prima_basica_udis) * 100)
+      : 0;
+  const coberturaMarkerPct =
+    flex && flex.prima_basica_udis > 0
+      ? Math.min(100, (flex.esperado_hoy_udis / flex.prima_basica_udis) * 100)
+      : 0;
+
   const getInitialFields = () => ({
     telefono: polizaData.telefono ?? "",
     email: polizaData.email ?? "",
@@ -235,14 +251,6 @@ const Modal: React.FC<ModalProps> = ({
                         {formatDate(polizaData.fecha_emision)}
                       </FieldValue>
                     </Field>
-                    <FullWidthField>
-                      <FieldLabel>Último pago registrado</FieldLabel>
-                      <FieldValue>
-                        {polizaData.payment_exist
-                          ? formatDate(polizaData.payment_exist)
-                          : "Sin pagos registrados"}
-                      </FieldValue>
-                    </FullWidthField>
                     <Field>
                       <FieldLabel>Moneda</FieldLabel>
                       <FieldValue>{polizaData.moneda}</FieldValue>
@@ -315,17 +323,59 @@ const Modal: React.FC<ModalProps> = ({
                             UDIS
                           </FieldValue>
                         </Field>
+                        <Field>
+                          <FieldLabel>Esperado a la fecha</FieldLabel>
+                          <FieldValue>
+                            {polizaData.flexible.esperado_hoy_udis.toFixed(2)}{" "}
+                            UDIS
+                          </FieldValue>
+                        </Field>
                         {polizaData.flexible.udis_faltantes > 0 && (
                           <FullWidthField>
-                            <FieldLabel>Estado del periodo actual</FieldLabel>
+                            <FieldLabel>
+                              {coberturaEstado === "Anulada"
+                                ? "Estado del periodo actual"
+                                : "Siguiente periodo"}
+                            </FieldLabel>
                             <FieldValue>
-                              Faltan{" "}
-                              {polizaData.flexible.udis_faltantes.toFixed(2)}{" "}
-                              UDIS para completar el periodo actual
+                              {coberturaEstado === "Anulada"
+                                ? `Faltan ${polizaData.flexible.udis_faltantes.toFixed(2)} UDIS para completar el periodo actual`
+                                : `Se esperan ${polizaData.flexible.udis_faltantes.toFixed(2)} UDIS para el siguiente periodo`}
                             </FieldValue>
                           </FullWidthField>
                         )}
                       </FieldGrid>
+
+                      <CoberturaBarWrapper>
+                        <CoberturaBarTrack>
+                          <CoberturaBarFill
+                            $width={coberturaFillPct}
+                            $type={coberturaEstado}
+                          />
+                          <CoberturaBarMarcador $left={coberturaMarkerPct} />
+                        </CoberturaBarTrack>
+                        <CoberturaDelta $type={coberturaEstado}>
+                          <Icon
+                            iconName={
+                              coberturaDelta < -TOLERANCIA_UDIS
+                                ? "Warning"
+                                : coberturaDelta > TOLERANCIA_UDIS
+                                  ? "TrendingUp"
+                                  : "CheckCircle"
+                            }
+                            size={14}
+                            isButton={false}
+                          />
+                          <span>
+                            {coberturaDelta < -TOLERANCIA_UDIS
+                              ? `Faltan ${Math.abs(coberturaDelta).toFixed(2)} UDIS para estar al día`
+                              : coberturaDelta > TOLERANCIA_UDIS
+                                ? `Vas adelantado, cubierto de más por ${coberturaDelta.toFixed(2)} UDIS`
+                                : "Al corriente"}
+                          </span>
+                        </CoberturaDelta>
+                      </CoberturaBarWrapper>
+
                       {polizaData.flexible.pagos &&
                         polizaData.flexible.pagos.length > 0 && (
                           <PagosDisclosure>
@@ -686,6 +736,54 @@ const FieldValue = styled.span`
   font-size: 13px;
   font-weight: 500;
   ${textTheme__css}
+`;
+
+/* ─── Barra de cobertura (pólizas flexibles) ─────────────────────── */
+const CoberturaBarWrapper = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+`;
+
+const CoberturaBarTrack = styled.div`
+  position: relative;
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background-color: ${(p) =>
+    p.theme.mode === "Dark" ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.06)"};
+`;
+
+const CoberturaBarFill = styled.div<{ $width: number; $type: StatusValues }>`
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 999px;
+  width: ${(p) => p.$width}%;
+  transition: width 0.2s ease;
+  ${CardTheme__CSS}
+`;
+
+const CoberturaBarMarcador = styled.div<{ $left: number }>`
+  position: absolute;
+  top: -3px;
+  left: ${(p) => p.$left}%;
+  width: 2px;
+  height: 14px;
+  border-radius: 1px;
+  transform: translateX(-1px);
+  background-color: ${(p) => (p.theme.mode === "Dark" ? "#fff" : "#1a1a1a")};
+`;
+
+const CoberturaDelta = styled.div<{ $type: StatusValues }>`
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  ${CardTextTheme__CSS}
 `;
 
 /* ─── Pagos UDIS (pólizas flexibles) ──────────────────────────── */

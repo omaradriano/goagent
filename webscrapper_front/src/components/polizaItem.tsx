@@ -6,6 +6,8 @@ import {
   MayorText,
   MinorText,
   NormalText,
+  TipoPolizaTextTheme__CSS,
+  TipoPolizaTheme__CSS,
   sectionBorderTheme__css,
   sectionTheme__css,
   textTheme__css,
@@ -42,7 +44,12 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
       {viewMode === "Mobile" ? (
         <PolizaItemCustom $viewMode={viewMode}>
           <PolizaItemHeader>
-            <MayorText>{data.num_poliza}</MayorText>
+            <HeaderLeft>
+              <MayorText>{data.num_poliza}</MayorText>
+              <TipoPolizaBadgeSmall $type={data.tipo_poliza}>
+                {data.tipo_poliza === "FLEXIBLE" ? "Flexible" : "Tradicional"}
+              </TipoPolizaBadgeSmall>
+            </HeaderLeft>
             <div>
               <CounterCard
                 parentContainer="Row"
@@ -74,6 +81,11 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
       ) : (
         <PolizaItemCustom $viewMode={viewMode}>
           <p>{data.num_poliza}</p>
+          <div>
+            <TipoPolizaBadgeSmall $type={data.tipo_poliza}>
+              {data.tipo_poliza === "FLEXIBLE" ? "Flexible" : "Tradicional"}
+            </TipoPolizaBadgeSmall>
+          </div>
           <p>{principal?.nombre}</p>
           <p>{data.tipo_seguro}</p>
           <div>
@@ -171,6 +183,24 @@ const PolizaItemHeader = styled.div`
     align-items: center;
     gap: 5px;
   }
+`;
+
+const HeaderLeft = styled.div`
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+`;
+
+const TipoPolizaBadgeSmall = styled.span<{ $type: PolizaGetItem["tipo_poliza"] }>`
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  ${TipoPolizaTheme__CSS}
+  ${TipoPolizaTextTheme__CSS}
 `;
 
 export default PolizaItem;

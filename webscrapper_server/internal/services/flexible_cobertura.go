@@ -8,9 +8,10 @@ import (
 // CoberturaResult es el resultado de evaluar los depositos UDIS de una poliza
 // flexible contra su prima basica, escalonado por periodo completo.
 type CoberturaResult struct {
-	NextPayment     time.Time
-	TotalPagadoUdis float64
-	UdisFaltantes   float64
+	NextPayment          time.Time
+	TotalPagadoUdis      float64
+	UdisFaltantes        float64
+	EsperadoALaFechaUdis float64
 }
 
 var pagosPorAnioFormaPago = map[string]int{
@@ -108,10 +109,31 @@ func CalcularSiguientePago(primaBasica float64, desde, hasta time.Time, formaPag
 		udisFaltantes = 0
 	}
 
+	// Cuantos periodos ya deberian estar cubiertos A LA FECHA DE HOY, en base
+	// al tiempo transcurrido desde "desde" (no en base a lo pagado) - sirve
+	// para contrastar visualmente "lo que se debe llevar pagado" contra
+	// TotalPagadoUdis. Un periodo se da por "debido" desde que INICIA (no
+	// desde que termina) porque el primer pago real se hace el mismo dia de
+	// "desde", no un mes despues - mismo criterio "vencido al inicio" que ya
+	// usa periodosCompletos/NextPayment, para que ambos calculos coincidan
+	// cuando los pagos van exactamente al corriente.
+	periodosTranscurridos := 0
+	hoy := time.Now()
+	for k := 1; k <= n; k++ {
+		inicioPeriodo := desde.AddDate(0, meses*(k-1), 0)
+		if !hoy.Before(inicioPeriodo) {
+			periodosTranscurridos = k
+		} else {
+			break
+		}
+	}
+	esperadoALaFecha := pagoEsperado * float64(periodosTranscurridos)
+
 	return CoberturaResult{
-		NextPayment:     nextPayment,
-		TotalPagadoUdis: totalPagado,
-		UdisFaltantes:   udisFaltantes,
+		NextPayment:          nextPayment,
+		TotalPagadoUdis:      totalPagado,
+		UdisFaltantes:        udisFaltantes,
+		EsperadoALaFechaUdis: esperadoALaFecha,
 	}
 }
 

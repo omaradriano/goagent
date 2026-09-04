@@ -51,6 +51,7 @@ type GetItem_PolizaFlexible struct {
 	AnualidadHasta  string                       `json:"anualidad_hasta"`
 	TotalPagadoUdis float64                      `json:"total_pagado_udis"`
 	UdisFaltantes   float64                      `json:"udis_faltantes"`
+	EsperadoHoyUdis float64                      `json:"esperado_hoy_udis"`
 	Pagos           []GetItem_PolizaFlexiblePago `json:"pagos,omitempty"`
 }
 

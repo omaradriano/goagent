@@ -39,6 +39,7 @@ export type PolizaFlexible = {
   anualidad_hasta: string;
   total_pagado_udis: number;
   udis_faltantes: number;
+  esperado_hoy_udis: number;
   pagos?: { fecha: string; importe_udi: number }[];
 };
 
