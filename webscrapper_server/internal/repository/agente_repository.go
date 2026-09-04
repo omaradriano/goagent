@@ -19,6 +19,7 @@ type AgenteRepository interface {
 	UpdatePassword(ctx context.Context, uuid string, hash string, noAgente *string, aseguradoraID *string) error
 	UpdateVerification(ctx context.Context, uuid string) error
 	UpdateSubscription(ctx context.Context, fields map[string]any, condition string, conditionVal any) error
+	UpdateProfileFields(ctx context.Context, agenteID int, fields map[string]any) error
 	GetSubscriptionStatus(ctx context.Context, uuid string) (*models.Agente, error)
 	GetSubscriptionID(ctx context.Context, uuid string) (string, error)
 	ValidateResetToken(ctx context.Context, token string) (string, string, string, time.Time, error)
@@ -123,6 +124,12 @@ func (r *agenteRepository) UpdateVerification(ctx context.Context, uuid string) 
 func (r *agenteRepository) UpdateSubscription(ctx context.Context, fields map[string]any, condition string, conditionVal any) error {
 	return r.db.WithContext(ctx).Model(&models.Agente{}).
 		Where(condition, conditionVal).
+		Updates(fields).Error
+}
+
+func (r *agenteRepository) UpdateProfileFields(ctx context.Context, agenteID int, fields map[string]any) error {
+	return r.db.WithContext(ctx).Model(&models.Agente{}).
+		Where("agente_id = ?", agenteID).
 		Updates(fields).Error
 }
 

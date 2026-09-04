@@ -162,6 +162,47 @@ async function captureFlexiblePayload(tabId) {
   return base;
 }
 
+// Captura el detalle completo (scrapping-all + branch TRADICIONAL/FLEXIBLE)
+// de la poliza actualmente cargada en tabId, despues de que ya se disparo el
+// postback y se espero la carga de la pagina. Compartido por el flujo de
+// alta (POST) y el de resync de pólizas existentes (PUT) dentro de
+// handlePostAllDb - la interaccion DOM es identica, solo cambia la llamada
+// API final.
+async function scrapeCurrentDetailPage(tabId) {
+  const scrapeRes = await chrome.tabs.sendMessage(tabId, {
+    action: "scrapping-all",
+  });
+
+  if (!scrapeRes?.success) {
+    throw new Error(
+      scrapeRes?.message ?? "No se pudieron capturar los datos de la póliza",
+    );
+  }
+
+  const typeCheck = await chrome.tabs.sendMessage(tabId, {
+    action: "get-poliza-type",
+  });
+
+  if (typeCheck.data.poliza_type_res === "recibosaportaciones") {
+    await waitForTabLoad(tabId);
+    const recibosRes = await chrome.tabs.sendMessage(tabId, {
+      action: "get-recibos-last-payment",
+    });
+    scrapeRes.payload.ultimo_pago =
+      recibosRes.data.last_payment ?? "No definido";
+    scrapeRes.payload.tipo_poliza = "TRADICIONAL";
+  } else if (typeCheck.data.poliza_type_res === "historicoaportaciones") {
+    await waitForTabLoad(tabId);
+    scrapeRes.payload.ultimo_pago = "No definido";
+    scrapeRes.payload.tipo_poliza = "FLEXIBLE";
+    scrapeRes.payload.flexible = await captureFlexiblePayload(tabId);
+  } else {
+    scrapeRes.payload.ultimo_pago = "No definido";
+  }
+
+  return scrapeRes.payload;
+}
+
 async function goToListPage(tabId, targetPage) {
   await chrome.tabs.update(tabId, { url: LIST_PAGE_URL });
   await waitForTabLoad(tabId);
@@ -256,12 +297,14 @@ export async function handlePostAllDb(request, sender, sendResponse) {
   const originalTabId = request.tab;
   const completedData = [];
   const failedPolizas = [];
+  let refreshedCount = 0;
+  let skippedCount = 0;
   let notificationId = null;
   let totalProcessed = 0;
   syncInterruptRequested = false;
 
   console.log(
-    "[GoAgent][sync] iniciando sincronizacion de todas las paginas disponibles",
+    "[GoAgent][sync] iniciando sincronizacion/re-sincronizacion de todas las paginas disponibles",
   );
 
   let notifRes = await chrome.tabs.sendMessage(originalTabId, {
@@ -277,19 +320,42 @@ export async function handlePostAllDb(request, sender, sendResponse) {
   });
   notificationId = notifRes.data.notification_id;
 
-  let dbPolizas = [];
+  // candidateSet: numpoliza dentro de la ventana "proximas a vencer"
+  // (agentes.daysuntiladvice) - requieren refresco completo aunque su
+  // estatus no haya cambiado. dbEstatusMap: numpoliza+estatus de TODA la
+  // cartera ya sincronizada - sirve tanto para detectar mismatches de
+  // estatus (refresco completo) como para saber si una poliza ya es
+  // conocida (sus llaves reemplazan la vieja consulta a
+  // /v1/scrapping/polizas_ids).
+  let candidateSet = new Set();
+  let dbEstatusMap = new Map();
   try {
-    const dbData = await apiRequest("/v1/scrapping/polizas_ids");
-    dbPolizas = dbData.payload.polizas ?? [];
+    const [candidatesData, estatusData] = await Promise.all([
+      apiRequest("/v1/scrapping/resync/candidates"),
+      apiRequest("/v1/scrapping/resync/estatus"),
+    ]);
+    candidateSet = new Set(candidatesData.payload.numpolizas ?? []);
+    dbEstatusMap = new Map(
+      (estatusData.payload.polizas ?? []).map((p) => [
+        p.numpoliza,
+        p.estatus,
+      ]),
+    );
+
+    console.log(
+      `[GoAgent][sync][db] candidatas por vencimiento (daysuntiladvice): ${candidateSet.size}`,
+      Array.from(candidateSet),
+    );
+    console.log(
+      `[GoAgent][sync][db] estatus guardado en BD para toda la cartera: ${dbEstatusMap.size} poliza(s)`,
+      Object.fromEntries(dbEstatusMap),
+    );
   } catch (error) {
     console.error(
-      "[GoAgent][sync] no se pudo obtener la lista de polizas ya sincronizadas",
+      "[GoAgent][sync] no se pudo obtener el estado de sincronizacion previo (candidatas/estatus)",
       error,
     );
   }
-  const dbSet = new Set(
-    dbPolizas.map((value) => (typeof value === "string" ? value.trim() : value)),
-  );
 
   let hiddenTab = null;
 
@@ -306,8 +372,41 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     const listRes = await chrome.tabs.sendMessage(hiddenTab.id, {
       action: "get-polizas-list",
     });
-    const pageItems = (listRes?.data?.polizas ?? []).filter(
-      (item) => !dbSet.has(item.idPoliza),
+    const allPageItems = listRes?.data?.polizas ?? [];
+
+    console.log(
+      `[GoAgent][sync][grid] pagina ${pageNum}: ${allPageItems.length} poliza(s) leidas de la grilla (numpoliza+estatus en vivo)`,
+      allPageItems.map((item) => ({
+        numpoliza: item.idPoliza,
+        estatus_grilla: item.estatus,
+      })),
+    );
+
+    // Una fila necesita accion cuando: (a) su numpoliza no esta en BD
+    // todavia (alta), o (b) esta dentro de la ventana de vencimiento
+    // (refresco completo), o (c) su estatus en vivo difiere del guardado
+    // (refresco completo - un cambio de estatus suele venir acompañado de
+    // otros cambios). El resto se omite: no vale la pena abrir su detalle.
+    function motivo(item) {
+      if (!dbEstatusMap.has(item.idPoliza)) return "alta (no existe en BD)";
+      if (candidateSet.has(item.idPoliza)) return "refresco (proxima a vencer)";
+      if (dbEstatusMap.get(item.idPoliza) !== item.estatus) {
+        return `refresco (estatus BD="${dbEstatusMap.get(item.idPoliza)}" vs grilla="${item.estatus}")`;
+      }
+      return "omitida (sin cambios)";
+    }
+
+    const toProcess = allPageItems.filter((item) => motivo(item) !== "omitida (sin cambios)");
+    skippedCount += allPageItems.length - toProcess.length;
+
+    console.log(
+      `[GoAgent][sync][plan] pagina ${pageNum}: mapa de acciones para ${allPageItems.length} poliza(s)`,
+      allPageItems.map((item) => ({
+        numpoliza: item.idPoliza,
+        estatus_grilla: item.estatus,
+        estatus_bd: dbEstatusMap.get(item.idPoliza) ?? "(nueva)",
+        accion: motivo(item),
+      })),
     );
 
     const pagerRes = await chrome.tabs.sendMessage(hiddenTab.id, {
@@ -317,10 +416,13 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     const nextPage = pagerRes?.data?.nextPage ?? null;
 
     console.log(
-      `[GoAgent][sync] pagina ${pageNum} de ${totalPages}: ${pageItems.length} poliza(s) nueva(s) de ${listRes?.data?.polizas?.length ?? 0} en la pagina`,
+      `[GoAgent][sync] pagina ${pageNum} de ${totalPages}: ${toProcess.length} poliza(s) requieren accion de ${allPageItems.length} en la pagina`,
     );
 
-    for (let i = 0; i < pageItems.length; i++) {
+    for (let i = 0; i < toProcess.length; i++) {
+      const item = toProcess[i];
+      const isNew = !dbEstatusMap.has(item.idPoliza);
+
       totalProcessed++;
       if (notificationId) {
         await chrome.tabs.sendMessage(originalTabId, {
@@ -334,7 +436,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
         data: {
           type: "loading",
           status: "success",
-          message: `Cargando registro ${i + 1} de ${pageItems.length} (página ${pageNum} de ${totalPages})`,
+          message: `Cargando registro ${i + 1} de ${toProcess.length} (página ${pageNum} de ${totalPages})`,
           submessage:
             "Se está obteniendo información de pólizas, por favor espere...",
           interruptible: true,
@@ -344,70 +446,38 @@ export async function handlePostAllDb(request, sender, sendResponse) {
 
       try {
         console.log(
-          `[GoAgent][sync] pagina ${pageNum} (${i + 1}/${pageItems.length}) postback`,
-          pageItems[i],
+          `[GoAgent][sync] pagina ${pageNum} (${i + 1}/${toProcess.length}) postback (${isNew ? "alta" : "refresco"})`,
+          item,
         );
 
-        await chrome.scripting.executeScript({
-          target: { tabId: hiddenTab.id },
-          world: "MAIN",
-          args: [pageItems[i].idPostback],
-          func: (id) => {
-            if (typeof __doPostBack === "function") {
-              __doPostBack(id, "");
-            }
-          },
-        });
+        await postBackTo(hiddenTab.id, item.idPostback);
         await waitForTabLoad(hiddenTab.id);
 
-        const scrapeRes = await chrome.tabs.sendMessage(hiddenTab.id, {
-          action: "scrapping-all",
-        });
-
-        if (!scrapeRes?.success) {
-          throw new Error(
-            scrapeRes?.message ?? "No se pudieron capturar los datos de la póliza",
-          );
-        }
-
-        const typeCheck = await chrome.tabs.sendMessage(hiddenTab.id, {
-          action: "get-poliza-type",
-        });
-
-        if (typeCheck.data.poliza_type_res === "recibosaportaciones") {
-          await waitForTabLoad(hiddenTab.id);
-          const recibosRes = await chrome.tabs.sendMessage(hiddenTab.id, {
-            action: "get-recibos-last-payment",
-          });
-          scrapeRes.payload.ultimo_pago =
-            recibosRes.data.last_payment ?? "No definido";
-          scrapeRes.payload.tipo_poliza = "TRADICIONAL";
-        } else if (typeCheck.data.poliza_type_res === "historicoaportaciones") {
-          await waitForTabLoad(hiddenTab.id);
-          scrapeRes.payload.ultimo_pago = "No definido";
-          scrapeRes.payload.tipo_poliza = "FLEXIBLE";
-          scrapeRes.payload.flexible = await captureFlexiblePayload(
-            hiddenTab.id,
-          );
-        } else {
-          scrapeRes.payload.ultimo_pago = "No definido";
-        }
+        const payload = await scrapeCurrentDetailPage(hiddenTab.id);
 
         console.log(
-          `[GoAgent][sync] pagina ${pageNum} (${i + 1}/${pageItems.length}) capturado`,
-          scrapeRes.payload,
+          `[GoAgent][sync] pagina ${pageNum} (${i + 1}/${toProcess.length}) capturado`,
+          payload,
         );
 
-        completedData.push({ ...scrapeRes.payload });
+        if (isNew) {
+          completedData.push({ ...payload });
+        } else {
+          await apiRequest("/v1/scrapping/poliza", {
+            method: "PUT",
+            body: JSON.stringify({ ...payload, num_poliza: item.idPoliza }),
+          });
+          refreshedCount++;
+        }
 
         await goToListPage(hiddenTab.id, pageNum);
       } catch (e) {
         console.error(
-          `[GoAgent][sync] pagina ${pageNum} (${i + 1}/${pageItems.length}) fallo al capturar poliza`,
-          pageItems[i],
+          `[GoAgent][sync] pagina ${pageNum} (${i + 1}/${toProcess.length}) fallo al capturar poliza`,
+          item,
           e,
         );
-        failedPolizas.push({ poliza: pageItems[i], error: e.message });
+        failedPolizas.push({ poliza: item, error: e.message });
 
         await goToListPage(hiddenTab.id, pageNum).catch(() => {});
       }
@@ -456,7 +526,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
   }
 
   console.log(
-    `[GoAgent][sync] scraping finalizado: ${completedData.length} poliza(s) listas para enviar (interrumpido: ${syncInterruptRequested})`,
+    `[GoAgent][sync] recorrido finalizado: ${completedData.length} alta(s), ${refreshedCount} refresco(s), ${skippedCount} omitida(s) (interrumpido: ${syncInterruptRequested})`,
   );
 
   if (hiddenTab) {
@@ -470,44 +540,47 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     });
   }
 
-  if (completedData.length === 0) {
+  if (completedData.length === 0 && refreshedCount === 0) {
     await chrome.tabs.sendMessage(originalTabId, {
       action: "show-progress-message",
       data: {
         type: "done",
         status: "success",
         message: syncInterruptRequested
-          ? "Sincronización interrumpida. No se capturaron registros nuevos."
-          : "No hay registros nuevos para sincronizar.",
+          ? "Sincronización interrumpida. No se capturaron cambios."
+          : "No hay cambios que sincronizar.",
         submessage: syncInterruptRequested
           ? "No se envió ningún registro a la base de datos."
-          : "Todas las pólizas disponibles ya se encuentran en el sistema.",
+          : "Todas las pólizas disponibles ya están al día en el sistema.",
       },
     });
 
     sendResponse({
       success: true,
       message: syncInterruptRequested
-        ? "Sincronización interrumpida sin registros nuevos"
-        : "No hay registros nuevos para sincronizar",
+        ? "Sincronización interrumpida sin cambios"
+        : "No hay cambios que sincronizar",
     });
     return;
   }
 
   try {
-    await apiRequest("/v1/scrapping/polizas", {
-      method: "POST",
-      body: JSON.stringify({ payload: completedData }),
-    });
+    if (completedData.length > 0) {
+      await apiRequest("/v1/scrapping/polizas", {
+        method: "POST",
+        body: JSON.stringify({ payload: completedData }),
+      });
+    }
 
+    const resumen = `${completedData.length} nueva(s), ${refreshedCount} actualizada(s)`;
     await chrome.tabs.sendMessage(originalTabId, {
       action: "show-progress-message",
       data: {
         type: "done",
         status: "success",
         message: syncInterruptRequested
-          ? `Sincronización interrumpida. Se cargaron ${completedData.length} registro(s) antes de detenerse.`
-          : "Se ha completado la carga de los registros.",
+          ? `Sincronización interrumpida. ${resumen} antes de detenerse.`
+          : "Se ha completado la sincronización.",
         submessage:
           "Ahora puede consultar los detalles de sus pólizas en la sección de mis pólizas en la aplicación web.",
       },
@@ -516,8 +589,8 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     sendResponse({
       success: true,
       message: syncInterruptRequested
-        ? `Sincronización interrumpida. Se cargaron ${completedData.length} registro(s).`
-        : "Se han cargado todos los registros con éxito",
+        ? `Sincronización interrumpida. ${resumen}.`
+        : `Sincronización completada: ${resumen}.`,
     });
   } catch (error) {
     console.error(

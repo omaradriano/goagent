@@ -192,9 +192,14 @@ async function handleSyncAll(tab) {
       ? `Se detectaron al menos ${comparedList.length} registro(s) nuevos en esta página. `
       : "";
 
+  const accionDescripcion =
+    inDbData.length > 0
+      ? "Se buscarán registros nuevos en todas las páginas disponibles y se actualizarán las pólizas próximas a vencer o cuyo estatus haya cambiado."
+      : "Se buscarán y sincronizarán los registros nuevos en todas las páginas disponibles.";
+
   alertModal.show(
     "Confirmación de carga de registros",
-    `${currentPageHint}Se buscarán y sincronizarán los registros nuevos en todas las páginas disponibles. Desea continuar?`,
+    `${currentPageHint}${accionDescripcion} Desea continuar?`,
     async () => {
       const res = await chrome.tabs.sendMessage(tab.id, {
         action: "post-all",
@@ -233,7 +238,15 @@ async function toggleViewDetails(submitType) {
         const resDb = await chrome.runtime.sendMessage({
           action: "get-all-in-db",
         });
-        const inDbData = resDb.data.polizas;
+        const inDbData = resDb.data.polizas ?? [];
+
+        // El mismo boton/handler cubre alta de polizas nuevas y refresco de
+        // las ya existentes (candidatas por vencimiento + mismatches de
+        // estatus) - una vez que el agente ya tiene registros cargados, el
+        // rotulo cambia para reflejar que tambien va a revisar/actualizar lo
+        // existente, no solo agregar lo nuevo.
+        elements.syncBtn.innerText =
+          inDbData.length > 0 ? "Actualizar cartera" : "Sincronizar registros";
 
         const resViewDetailed = await chrome.tabs.sendMessage(currentTabId, {
           action: "get-all-in-view-detailed",

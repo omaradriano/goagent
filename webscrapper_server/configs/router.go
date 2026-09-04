@@ -33,12 +33,15 @@ func NewRouter() http.Handler {
 			r.Use(middlewares.JWTMiddleware)
 
 			r.Get("/auth/checkSession", handlers.ApiCheckSession)
+			r.Get("/auth/profile", handlers.ApiGetAgenteProfile)
 
 			// Lectura de polizas
 			r.Get("/scrapping/details", handlers.ApiGetDetails)
 			r.Get("/scrapping/polizas", handlers.ApiGetPolizas)
 			r.Get("/scrapping/polizas_ids", handlers.ApiGetPolizasIds)
 			r.Get("/scrapping/poliza/{polizaNum}", handlers.ApiGetPoliza)
+			r.Get("/scrapping/resync/candidates", handlers.ApiGetResyncCandidates)
+			r.Get("/scrapping/resync/estatus", handlers.ApiGetResyncEstatus)
 
 			// Audit (lectura)
 			r.Get("/audit/poliza/{polizaUUID}", handlers.ApiGetPolizaAudit)
@@ -65,6 +68,10 @@ func NewRouter() http.Handler {
 
 			// Modificación de polizas
 			r.Patch("/scrapping/poliza", handlers.ApiPatchPoliza)
+			r.Put("/scrapping/poliza", handlers.ApiPutPoliza)
+
+			// Perfil del agente
+			r.Patch("/auth/profile", handlers.ApiPatchAgenteProfile)
 
 			// Calendario de cumpleaños
 			r.Get("/polizas/birthdates", handlers.ApiGetBirthdates)

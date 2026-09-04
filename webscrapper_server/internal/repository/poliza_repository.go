@@ -9,6 +9,11 @@ import (
 	"gorm.io/gorm"
 )
 
+// NextDueWindowSQL expresa la ventana de "próximas a vencer" en días
+// configurables por agente (agentes.daysuntiladvice). Requiere que la query
+// que la usa ya tenga un JOIN a "agentes a".
+const NextDueWindowSQL = "make_interval(days => a.daysuntiladvice)"
+
 type PolizaFilters struct {
 	AgenteID    int
 	Filters     map[string]string
@@ -45,6 +50,15 @@ type PolizaRepository interface {
 	UpdatePolizaFields(ctx context.Context, numPoliza string, agenteID int, fields map[string]interface{}, auditRepo AuditRepository) error
 	UpdatePolizaFieldsByID(ctx context.Context, polizaID int, fields map[string]interface{}, changedBy int, auditRepo AuditRepository) error
 	UpsertNextPayment(ctx context.Context, polizaID int64, nextPayment time.Time) error
+	GetResyncCandidateNums(ctx context.Context, agenteID int) ([]string, error)
+	GetAllNumPolizaEstatus(ctx context.Context, agenteID int) ([]NumEstatus, error)
+}
+
+// NumEstatus es la proyeccion barata numpoliza+estatus usada para el diff
+// de reconciliacion de resync contra la grilla en vivo.
+type NumEstatus struct {
+	NumPoliza string
+	Estatus   string
 }
 
 type polizaRepository struct {
@@ -220,30 +234,54 @@ func (r *polizaRepository) GetPolizasPaginated(ctx context.Context, filters Poli
 	return results, totalRecords, err
 }
 
+// polizaAuditSnapshot captura el valor "antes" de cada columna actualizable
+// de polizas, para el diff de auditoria en UpdatePolizaFields/
+// UpdatePolizaFieldsByID. Cubre todas las columnas planas que puede tocar un
+// refresco completo (ApiPutPoliza), no solo el subconjunto de 5 campos que
+// edita manualmente ApiPatchPoliza - de lo contrario un refresco que cambia
+// ej. "plan" o "addr_calle" no quedaria auditado.
+func polizaAuditSnapshot(p *models.Poliza) map[string]string {
+	snapshot := map[string]string{
+		"dia_cobro":         fmt.Sprintf("%d", p.DiaCobro),
+		"estatus":           p.Estatus,
+		"fecha_emision":     p.FechaEmision.Format("2006-01-02"),
+		"forma_pago":        p.FormaPago,
+		"medio_cobro":       p.MedioCobro,
+		"plan":              p.Plan,
+		"tipo_seguro":       p.TipoSeguro,
+		"addr_calle":        p.AddrCalle,
+		"addr_codigopostal": p.AddrCodigoPostal,
+		"addr_ciudad":       p.AddrCiudad,
+		"addr_colonia":      p.AddrColonia,
+		"addr_estado":       p.AddrEstado,
+		"tipo_poliza":       p.TipoPoliza,
+	}
+	strPtrFields := map[string]*string{
+		"telefono":       p.Telefono,
+		"email":          p.Email,
+		"moneda":         p.Moneda,
+		"pais":           p.Pais,
+		"suma_asegurada": p.SumaAsegurada,
+	}
+	for k, v := range strPtrFields {
+		if v != nil {
+			snapshot[k] = *v
+		} else {
+			snapshot[k] = ""
+		}
+	}
+	return snapshot
+}
+
 func (r *polizaRepository) UpdatePolizaFields(ctx context.Context, numPoliza string, agenteID int, fields map[string]interface{}, auditRepo AuditRepository) error {
 	var poliza models.Poliza
 	if err := r.db.WithContext(ctx).
-		Select("poliza_id, dia_cobro, forma_pago, estatus, telefono, email").
 		Where("numpoliza = ? AND agente_id = ?", numPoliza, agenteID).
 		First(&poliza).Error; err != nil {
 		return err
 	}
 
-	oldFields := map[string]string{
-		"dia_cobro":  fmt.Sprintf("%d", poliza.DiaCobro),
-		"forma_pago": poliza.FormaPago,
-		"estatus":    poliza.Estatus,
-	}
-	if poliza.Telefono != nil {
-		oldFields["telefono"] = *poliza.Telefono
-	} else {
-		oldFields["telefono"] = ""
-	}
-	if poliza.Email != nil {
-		oldFields["email"] = *poliza.Email
-	} else {
-		oldFields["email"] = ""
-	}
+	oldFields := polizaAuditSnapshot(&poliza)
 
 	result := r.db.WithContext(ctx).
 		Model(&models.Poliza{}).
@@ -271,22 +309,12 @@ func (r *polizaRepository) UpdatePolizaFields(ctx context.Context, numPoliza str
 func (r *polizaRepository) UpdatePolizaFieldsByID(ctx context.Context, polizaID int, fields map[string]interface{}, changedBy int, auditRepo AuditRepository) error {
 	var poliza models.Poliza
 	if err := r.db.WithContext(ctx).
-		Select("poliza_id, dia_cobro, forma_pago, estatus, telefono").
 		Where("poliza_id = ?", polizaID).
 		First(&poliza).Error; err != nil {
 		return err
 	}
 
-	oldFields := map[string]string{
-		"dia_cobro":  fmt.Sprintf("%d", poliza.DiaCobro),
-		"forma_pago": poliza.FormaPago,
-		"estatus":    poliza.Estatus,
-	}
-	if poliza.Telefono != nil {
-		oldFields["telefono"] = *poliza.Telefono
-	} else {
-		oldFields["telefono"] = ""
-	}
+	oldFields := polizaAuditSnapshot(&poliza)
 
 	result := r.db.WithContext(ctx).
 		Model(&models.Poliza{}).
@@ -330,6 +358,35 @@ func (r *polizaRepository) UpsertNextPayment(ctx context.Context, polizaID int64
 
 	pid := polizaID
 	return r.db.WithContext(ctx).Create(&models.PaymentConf{PolizaID: &pid, NextPayment: &nextPayment}).Error
+}
+
+// GetResyncCandidateNums devuelve los numpoliza cuyo next_payment cae dentro
+// de la ventana daysuntiladvice del agente (mismo criterio que "por_vencer"
+// en ApiGetDetails), excluyendo Anuladas.
+func (r *polizaRepository) GetResyncCandidateNums(ctx context.Context, agenteID int) ([]string, error) {
+	var nums []string
+	err := r.db.WithContext(ctx).Raw(fmt.Sprintf(`
+		SELECT p.numpoliza
+		FROM polizas p
+		JOIN agentes a ON p.agente_id = a.agente_id
+		JOIN polizas_payments_conf ppc ON p.poliza_id = ppc.poliza_id
+		WHERE a.agente_id = ?
+		  AND p.estatus != 'Anulada'
+		  AND ppc.next_payment <= CURRENT_DATE + %s`, NextDueWindowSQL), agenteID).
+		Scan(&nums).Error
+	return nums, err
+}
+
+// GetAllNumPolizaEstatus devuelve numpoliza+estatus de toda la cartera del
+// agente, para contrastar contra la grilla en vivo durante el resync.
+func (r *polizaRepository) GetAllNumPolizaEstatus(ctx context.Context, agenteID int) ([]NumEstatus, error) {
+	var results []NumEstatus
+	err := r.db.WithContext(ctx).
+		Model(&models.Poliza{}).
+		Select("numpoliza as num_poliza, estatus").
+		Where("agente_id = ?", agenteID).
+		Scan(&results).Error
+	return results, err
 }
 
 func (r *polizaRepository) GetBirthdates(ctx context.Context, agenteID int) ([]BirthdateResult, error) {

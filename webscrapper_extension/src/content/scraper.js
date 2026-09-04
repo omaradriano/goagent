@@ -58,9 +58,21 @@ export function getPolizasList() {
     .map((a) => {
       const href = a.getAttribute("href");
       const match = href.match(/'([^']+)'/);
+      const row = a.closest("tr");
+      // El span de estatus tiene un id con sufijo estable
+      // (ctl00_..._GVPolList_ctlNN_lblEstatus, confirmado contra el HTML real
+      // de la grilla) - se usa ese sufijo en vez de contar posicion de <td>,
+      // igual de robusto que los lookups por id que ya usa
+      // capturePolizaDetails más arriba en este archivo, y no se rompe si la
+      // fila trae o no botones opcionales ("Mail Order"/"Renovacion") que
+      // alteran el conteo de celdas.
+      const estatus =
+        row?.querySelector("span[id$='_lblEstatus']")?.innerText.trim() ??
+        null;
       return {
         idPostback: match ? match[1] : null,
         idPoliza: a.innerText.trim(),
+        estatus,
       };
     })
     .filter((item) => item.idPostback !== null);

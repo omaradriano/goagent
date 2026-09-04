@@ -39,6 +39,10 @@ type PostItems_Poliza struct {
 	Payload []PostItem_Poliza `json:"payload"`
 }
 
+type PatchItem_Agente struct {
+	DaysUntilAdvice *int16 `json:"daysuntiladvice,omitempty"`
+}
+
 type PatchItem_Poliza struct {
 	NumPoliza string  `json:"numpoliza"`
 	DiaCobro  *int16  `json:"dia_cobro,omitempty"`

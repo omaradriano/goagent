@@ -12,6 +12,7 @@ import PolizasContainer from "./polizasContainer";
 import Button from "./button";
 import Icon from "./icon";
 import SearchBar from "./searchbar";
+import AgenteSettings from "./agenteSettings";
 
 import {
   textTheme__css,
@@ -39,6 +40,7 @@ const Dashboard: React.FC = () => {
 
   const [showAnuladasFilter, setAnuladasFilter] = useState(true);
   const [showAnuladasCheckbox, setShowAnuladasCheckbox] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [detailsData, setDetailsData] = useState<{
     total: number;
@@ -172,7 +174,15 @@ const Dashboard: React.FC = () => {
             Gestiona tus recordatorios de corte de pólizas.
           </DashboardText>
         </HeaderLeft>
+        <SettingsBtn
+          onClick={() => setSettingsOpen(true)}
+          aria-label="Preferencias de cuenta"
+        >
+          <Icon iconName="Settings" size={20} />
+        </SettingsBtn>
       </DashboardHeader>
+
+      <AgenteSettings modalOpen={settingsOpen} setModalOpen={setSettingsOpen} />
 
       {/* Stat cards */}
       <StatContainer>
@@ -350,6 +360,24 @@ const HeaderLeft = styled.div`
   display: flex;
   flex-direction: column;
   gap: 4px;
+`;
+
+const SettingsBtn = styled.button`
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background-color 0.15s;
+
+  &:hover {
+    background-color: rgba(21, 93, 252, 0.08);
+  }
 `;
 
 const StatContainer = styled.div`

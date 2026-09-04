@@ -15,6 +15,7 @@ import (
 	"github.com/omaradriano/cobranzawebscrapper_server/internal/dto"
 	"github.com/omaradriano/cobranzawebscrapper_server/internal/middlewares"
 	"github.com/omaradriano/cobranzawebscrapper_server/internal/models"
+	"github.com/omaradriano/cobranzawebscrapper_server/internal/repository"
 	"github.com/omaradriano/cobranzawebscrapper_server/internal/services"
 	"gorm.io/gorm"
 )
@@ -427,77 +428,9 @@ func ApiPostPoliza(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if tipoPoliza == "FLEXIBLE" && item.Flexible == nil {
-		// La extension no pudo capturar el detalle de aportaciones (ej.
-		// poliza recien emitida, aun sin tabla de anualidades del lado del
-		// asegurador, o fallo de red/timing en el sitio origen). Igual se
-		// asegura una fila en polizas_payments_conf, estimando el primer
-		// pago como fecha_emision + un periodo, para que la poliza no
-		// desaparezca de los listados (que hacen JOIN contra esa tabla) - el
-		// siguiente sync exitoso la corrige con datos reales.
+	if tipoPoliza == "FLEXIBLE" {
 		pid := int64(poliza.PolizaID)
-		nextPayment := services.PrimerPagoEstimado(fechaEmision, item.FormaPago, item.DiaCobro)
-		if err := deps.PolizaRepo.UpsertNextPayment(r.Context(), pid, nextPayment); err != nil {
-			services.Log.ErrorMessage(err.Error())
-			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
-			return
-		}
-	}
-
-	if tipoPoliza == "FLEXIBLE" && item.Flexible != nil {
-		desde, errDesde := time.Parse("2006-01-02", item.Flexible.AnualidadDesde)
-		hasta, errHasta := time.Parse("2006-01-02", item.Flexible.AnualidadHasta)
-		if errDesde != nil || errHasta != nil {
-			// Fechas invalidas en el payload capturado: no se aborta la
-			// respuesta (la poliza y sus asegurados ya se guardaron), solo se
-			// asegura la fila en polizas_payments_conf para que no desaparezca
-			// de los listados.
-			pid := int64(poliza.PolizaID)
-			nextPayment := services.PrimerPagoEstimado(fechaEmision, item.FormaPago, item.DiaCobro)
-			if err := deps.PolizaRepo.UpsertNextPayment(r.Context(), pid, nextPayment); err != nil {
-				services.Log.ErrorMessage(err.Error())
-				services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
-				return
-			}
-			services.HandleResponseSuccess(w)
-			return
-		}
-
-		pid := int64(poliza.PolizaID)
-		anualidad := &models.PolizaFlexibleAnualidad{
-			PolizaID:        &pid,
-			PrimaBasicaUdis: item.Flexible.PrimaBasicaUdis,
-			AnualidadDesde:  desde,
-			AnualidadHasta:  hasta,
-		}
-		if err := deps.PolizaFlexibleRepo.UpsertAnualidad(r.Context(), anualidad); err != nil {
-			services.Log.ErrorMessage(err.Error())
-			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
-			return
-		}
-
-		var pagos []models.PolizaFlexiblePago
-		var pagosUdis []float64
-		for _, p := range item.Flexible.Pagos {
-			fecha, err := time.Parse("2006-01-02", p.Fecha)
-			if err != nil {
-				continue
-			}
-			pagos = append(pagos, models.PolizaFlexiblePago{
-				PolizaID:   &pid,
-				FechaPago:  fecha,
-				ImporteUdi: p.ImporteUdi,
-			})
-			pagosUdis = append(pagosUdis, p.ImporteUdi)
-		}
-		if err := deps.PolizaFlexibleRepo.ReplacePagos(r.Context(), pid, pagos); err != nil {
-			services.Log.ErrorMessage(err.Error())
-			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
-			return
-		}
-
-		cobertura := services.CalcularSiguientePago(item.Flexible.PrimaBasicaUdis, desde, hasta, item.FormaPago, pagosUdis, item.DiaCobro)
-		if err := deps.PolizaRepo.UpsertNextPayment(r.Context(), pid, cobertura.NextPayment); err != nil {
+		if err := syncFlexiblePoliza(r.Context(), pid, item.FormaPago, item.DiaCobro, fechaEmision, item.Flexible); err != nil {
 			services.Log.ErrorMessage(err.Error())
 			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
 			return
@@ -593,13 +526,13 @@ func ApiGetDetails(w http.ResponseWriter, r *http.Request) {
 	userUUID, _ := r.Context().Value(middlewares.UserIDKey).(string)
 	var details dto.PolizasUserDetails
 
-	err := deps.DB.WithContext(r.Context()).Raw(`
+	err := deps.DB.WithContext(r.Context()).Raw(fmt.Sprintf(`
 		SELECT
 			COALESCE(COUNT(*), 0) as total,
 			COALESCE(COUNT(CASE WHEN p.estatus = 'En Vigor' THEN 1 END), 0) as activas,
 			COALESCE(COUNT(CASE WHEN p.estatus != 'En Vigor' THEN 1 END), 0) as inactivas,
-			COALESCE(COUNT(CASE WHEN ppc.next_payment <= CURRENT_DATE + INTERVAL '5 days' AND p.estatus != 'Anulada' THEN 1 END), 0) as por_vencer,
-			COALESCE(COUNT(CASE WHEN ppc.next_payment >= CURRENT_DATE + INTERVAL '5 days' AND ppl.paid_period IS NOT NULL THEN 1 END), 0) as cobertura_activa,
+			COALESCE(COUNT(CASE WHEN ppc.next_payment <= CURRENT_DATE + %s AND p.estatus != 'Anulada' THEN 1 END), 0) as por_vencer,
+			COALESCE(COUNT(CASE WHEN ppc.next_payment >= CURRENT_DATE + %s AND ppl.paid_period IS NOT NULL THEN 1 END), 0) as cobertura_activa,
 			COALESCE(COUNT(CASE WHEN ppl.paid_period IS NULL THEN 1 END), 0) as sin_pago_registrado
 		FROM polizas p
 		JOIN agentes a ON p.agente_id = a.agente_id
@@ -609,7 +542,7 @@ func ApiGetDetails(w http.ResponseWriter, r *http.Request) {
 				FROM polizas_payments_log
 				ORDER BY poliza_id, payment_log_id DESC
 			) ppl ON ppl.poliza_id = p.poliza_id
-		WHERE a.agente_uuid = ?`, userUUID).
+		WHERE a.agente_uuid = ?`, repository.NextDueWindowSQL, repository.NextDueWindowSQL), userUUID).
 		Scan(&details).Error
 	if err != nil {
 		services.Log.ErrorMessage(err.Error())
@@ -842,7 +775,7 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		if columna == "next_due" && valor == "true" {
-			baseQuery += ` AND ppc.next_payment <= NOW() + INTERVAL '5 days'`
+			baseQuery += fmt.Sprintf(" AND ppc.next_payment <= NOW() + %s", repository.NextDueWindowSQL)
 		} else if columna == "numpoliza" {
 			argCount++
 			baseQuery += fmt.Sprintf(" AND p.numpoliza ILIKE $%d", argCount)
@@ -1048,4 +981,177 @@ func ApiGetBirthdates(w http.ResponseWriter, r *http.Request) {
 	}
 
 	services.HandleResponseSuccessWithData(birthdates, w)
+}
+
+// ApiPutPoliza reconcilia por completo una poliza EXISTENTE contra un nuevo
+// scrape (candidatas por vencimiento o mismatches de estatus del flujo de
+// resync). Reutiliza dto.PostItem_Poliza como body, mismo shape que
+// ApiPostPoliza - la diferencia semantica es que aqui numpoliza debe YA
+// existir para el agente (404 si no).
+func ApiPutPoliza(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Methods", "PUT")
+
+	agenteUUID, _ := r.Context().Value(middlewares.UserIDKey).(string)
+
+	var item dto.PostItem_Poliza
+	if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
+		services.HandleResponseError(http.StatusBadRequest, "Error decodificando JSON", w)
+		return
+	}
+
+	agenteID, err := deps.AgenteRepo.FindIDByUUID(r.Context(), agenteUUID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			services.HandleResponseError(http.StatusNotFound, "El agente no existe en la base de datos", w)
+			return
+		}
+		services.Log.ErrorMessage(err.Error())
+		services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+		return
+	}
+
+	existing, err := deps.PolizaRepo.FindByNumPoliza(r.Context(), item.NumPoliza, agenteID)
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			services.HandleResponseError(http.StatusNotFound, "La póliza no existe; utilice el alta de nuevo registro", w)
+			return
+		}
+		services.Log.ErrorMessage(err.Error())
+		services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+		return
+	}
+
+	fechaEmision, _ := time.Parse("2006-01-02", item.FechaEmision)
+	tipoPoliza := item.TipoPoliza
+	if tipoPoliza == "" {
+		tipoPoliza = "TRADICIONAL"
+	}
+
+	fields := map[string]interface{}{
+		"dia_cobro":         item.DiaCobro,
+		"estatus":           item.Estatus,
+		"fecha_emision":     fechaEmision,
+		"forma_pago":        item.FormaPago,
+		"medio_cobro":       item.MedioCobro,
+		"plan":              item.Plan,
+		"tipo_seguro":       item.TipoSeguro,
+		"addr_calle":        item.Direccion.Calle,
+		"addr_codigopostal": item.Direccion.CodigoPostal,
+		"addr_ciudad":       item.Direccion.Ciudad,
+		"addr_colonia":      item.Direccion.Colonia,
+		"addr_estado":       item.Direccion.Estado,
+		"moneda":            item.Moneda,
+		"telefono":          item.Telefono,
+		"suma_asegurada":    item.SumaAsegurada,
+		"email":             item.Email,
+		"pais":              item.Pais,
+		"tipo_poliza":       tipoPoliza,
+	}
+	if err := deps.PolizaRepo.UpdatePolizaFields(r.Context(), item.NumPoliza, agenteID, fields, deps.AuditRepo); err != nil {
+		services.Log.ErrorMessage(err.Error())
+		services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+		return
+	}
+
+	if len(item.Asegurados) > 0 {
+		var asegurados []models.Asegurado
+		pid64 := int64(existing.PolizaID)
+		for _, aseg := range item.Asegurados {
+			isPrincipal := aseg.IsPrincipal
+			birthday, _ := time.Parse(time.RFC3339, aseg.Cumpleanos)
+			var birthdayPtr *time.Time
+			if !birthday.IsZero() {
+				birthdayPtr = &birthday
+			}
+			asegurados = append(asegurados, models.Asegurado{
+				NombreCompleto: aseg.Nombre,
+				Birthday:       birthdayPtr,
+				IsPrincipal:    &isPrincipal,
+				PolizaID:       &pid64,
+			})
+		}
+		if err := deps.AseguradoRepo.ReplaceByPolizaID(r.Context(), existing.PolizaID, asegurados); err != nil {
+			services.Log.ErrorMessage(err.Error())
+			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+			return
+		}
+	}
+
+	polizaID := int64(existing.PolizaID)
+	if tipoPoliza == "FLEXIBLE" {
+		if err := syncFlexiblePoliza(r.Context(), polizaID, item.FormaPago, item.DiaCobro, fechaEmision, item.Flexible); err != nil {
+			services.Log.ErrorMessage(err.Error())
+			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+			return
+		}
+	} else {
+		if err := syncTradicionalUltimoPago(r.Context(), polizaID, item.UltimoPago); err != nil {
+			services.Log.ErrorMessage(err.Error())
+			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+			return
+		}
+	}
+
+	services.HandleResponseSuccess(w)
+}
+
+// ApiGetResyncCandidates devuelve los numpoliza del agente que caen dentro
+// de su ventana de "proximas a vencer" (agentes.daysuntiladvice) - JSON A
+// del flujo de resync en la extension.
+func ApiGetResyncCandidates(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Methods", "GET")
+
+	userUUID, _ := r.Context().Value(middlewares.UserIDKey).(string)
+
+	agenteID, err := deps.AgenteRepo.FindIDByUUID(r.Context(), userUUID)
+	if err != nil {
+		services.Log.ErrorMessage(err.Error())
+		services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+		return
+	}
+
+	numpolizas, err := deps.PolizaRepo.GetResyncCandidateNums(r.Context(), agenteID)
+	if err != nil {
+		services.Log.ErrorMessage(err.Error())
+		services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+		return
+	}
+	if numpolizas == nil {
+		numpolizas = []string{}
+	}
+
+	services.HandleResponseSuccessWithData(map[string]any{"numpolizas": numpolizas}, w)
+}
+
+// ApiGetResyncEstatus devuelve numpoliza+estatus de toda la cartera del
+// agente - JSON B del flujo de resync en la extension, contrastado contra
+// el estatus leido en vivo de la grilla PolizasAgente.aspx.
+func ApiGetResyncEstatus(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Methods", "GET")
+
+	userUUID, _ := r.Context().Value(middlewares.UserIDKey).(string)
+
+	agenteID, err := deps.AgenteRepo.FindIDByUUID(r.Context(), userUUID)
+	if err != nil {
+		services.Log.ErrorMessage(err.Error())
+		services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+		return
+	}
+
+	results, err := deps.PolizaRepo.GetAllNumPolizaEstatus(r.Context(), agenteID)
+	if err != nil {
+		services.Log.ErrorMessage(err.Error())
+		services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+		return
+	}
+
+	polizas := make([]map[string]string, 0, len(results))
+	for _, res := range results {
+		polizas = append(polizas, map[string]string{
+			"numpoliza": res.NumPoliza,
+			"estatus":   res.Estatus,
+		})
+	}
+
+	services.HandleResponseSuccessWithData(map[string]any{"polizas": polizas}, w)
 }
