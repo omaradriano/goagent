@@ -223,7 +223,7 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 				fechaEmision = time.Now()
 			}
 			nextPaymentIDs = append(nextPaymentIDs, polizaID)
-			nextPaymentDates = append(nextPaymentDates, services.PrimerPagoEstimado(fechaEmision, item.FormaPago))
+			nextPaymentDates = append(nextPaymentDates, services.PrimerPagoEstimado(fechaEmision, item.FormaPago, item.DiaCobro))
 			continue
 		}
 
@@ -235,7 +235,7 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 				fechaEmision = time.Now()
 			}
 			nextPaymentIDs = append(nextPaymentIDs, polizaID)
-			nextPaymentDates = append(nextPaymentDates, services.PrimerPagoEstimado(fechaEmision, item.FormaPago))
+			nextPaymentDates = append(nextPaymentDates, services.PrimerPagoEstimado(fechaEmision, item.FormaPago, item.DiaCobro))
 			continue
 		}
 
@@ -256,7 +256,7 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 			pagosUdis = append(pagosUdis, pago.ImporteUdi)
 		}
 
-		cobertura := services.CalcularSiguientePago(item.Flexible.PrimaBasicaUdis, desde, hasta, item.FormaPago, pagosUdis)
+		cobertura := services.CalcularSiguientePago(item.Flexible.PrimaBasicaUdis, desde, hasta, item.FormaPago, pagosUdis, item.DiaCobro)
 		nextPaymentIDs = append(nextPaymentIDs, polizaID)
 		nextPaymentDates = append(nextPaymentDates, cobertura.NextPayment)
 	}
@@ -436,7 +436,7 @@ func ApiPostPoliza(w http.ResponseWriter, r *http.Request) {
 		// desaparezca de los listados (que hacen JOIN contra esa tabla) - el
 		// siguiente sync exitoso la corrige con datos reales.
 		pid := int64(poliza.PolizaID)
-		nextPayment := services.PrimerPagoEstimado(fechaEmision, item.FormaPago)
+		nextPayment := services.PrimerPagoEstimado(fechaEmision, item.FormaPago, item.DiaCobro)
 		if err := deps.PolizaRepo.UpsertNextPayment(r.Context(), pid, nextPayment); err != nil {
 			services.Log.ErrorMessage(err.Error())
 			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
@@ -453,7 +453,7 @@ func ApiPostPoliza(w http.ResponseWriter, r *http.Request) {
 			// asegura la fila en polizas_payments_conf para que no desaparezca
 			// de los listados.
 			pid := int64(poliza.PolizaID)
-			nextPayment := services.PrimerPagoEstimado(fechaEmision, item.FormaPago)
+			nextPayment := services.PrimerPagoEstimado(fechaEmision, item.FormaPago, item.DiaCobro)
 			if err := deps.PolizaRepo.UpsertNextPayment(r.Context(), pid, nextPayment); err != nil {
 				services.Log.ErrorMessage(err.Error())
 				services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
@@ -496,7 +496,7 @@ func ApiPostPoliza(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		cobertura := services.CalcularSiguientePago(item.Flexible.PrimaBasicaUdis, desde, hasta, item.FormaPago, pagosUdis)
+		cobertura := services.CalcularSiguientePago(item.Flexible.PrimaBasicaUdis, desde, hasta, item.FormaPago, pagosUdis, item.DiaCobro)
 		if err := deps.PolizaRepo.UpsertNextPayment(r.Context(), pid, cobertura.NextPayment); err != nil {
 			services.Log.ErrorMessage(err.Error())
 			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
@@ -711,7 +711,7 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 			}
 			cobertura := services.CalcularSiguientePago(
 				anualidad.PrimaBasicaUdis, anualidad.AnualidadDesde, anualidad.AnualidadHasta,
-				cobranza.FormaPago, pagosUdis,
+				cobranza.FormaPago, pagosUdis, cobranza.DiaCobro,
 			)
 			cobranza.Flexible = &dto.GetItem_PolizaFlexible{
 				PrimaBasicaUdis: anualidad.PrimaBasicaUdis,
@@ -979,7 +979,7 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 				}
 				cobertura := services.CalcularSiguientePago(
 					anualidad.PrimaBasicaUdis, anualidad.AnualidadDesde, anualidad.AnualidadHasta,
-					polizas[i].FormaPago, pagosUdis,
+					polizas[i].FormaPago, pagosUdis, polizas[i].DiaCobro,
 				)
 				polizas[i].Flexible = &dto.GetItem_PolizaFlexible{
 					PrimaBasicaUdis: anualidad.PrimaBasicaUdis,

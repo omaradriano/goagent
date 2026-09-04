@@ -21,12 +21,7 @@ import {
 import { AlertContext, AuthContext, DataChangedContext, SubscriptionContext } from "../Context/ContextConfig";
 import { useNavigate } from "react-router";
 
-type FormaPago = "MENSUAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL";
-
 interface EditableFields {
-  forma_pago: FormaPago;
-  dia_cobro: number;
-  estatus: StatusValues;
   telefono: string;
   email: string;
 }
@@ -40,13 +35,6 @@ export interface ModalProps {
   polizaData: PolizaGetItem;
 }
 
-const FORMAS_PAGO: FormaPago[] = [
-  "MENSUAL",
-  "TRIMESTRAL",
-  "SEMESTRAL",
-  "ANUAL",
-];
-
 const Modal: React.FC<ModalProps> = ({
   title = "Detalle de Póliza",
   modalOpen = false,
@@ -57,9 +45,6 @@ const Modal: React.FC<ModalProps> = ({
   const dependientes = polizaData?.asegurados?.filter((a) => !a.is_principal);
 
   const getInitialFields = () => ({
-    forma_pago: (polizaData.forma_pago ?? "MENSUAL") as FormaPago,
-    dia_cobro: polizaData.diaCobro ?? 0,
-    estatus: polizaData.estatus ?? "En Vigor",
     telefono: polizaData.telefono ?? "",
     email: polizaData.email ?? "",
   });
@@ -82,9 +67,6 @@ const Modal: React.FC<ModalProps> = ({
   }, [polizaData, modalOpen]);
 
   const hasChanges =
-    editFields.forma_pago !== polizaData.forma_pago ||
-    editFields.dia_cobro !== polizaData.diaCobro ||
-    editFields.estatus !== polizaData.estatus ||
     editFields.telefono !== (polizaData.telefono ?? "") ||
     editFields.email !== (polizaData.email ?? "");
 
@@ -96,26 +78,6 @@ const Modal: React.FC<ModalProps> = ({
       onConfirm: () => alertContext.setShowAlert(false),
     });
     alertContext?.setShowAlert(true);
-  };
-
-  const handleDiaCobroChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value.replace(/\D/g, "");
-    let num = raw === "" ? 0 : parseInt(raw, 10);
-    if (num > 31) num = 31;
-    setEditFields((prev) => ({ ...prev, dia_cobro: num }));
-  };
-
-  const handleDiaCobroBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    if (e.target.value === "" || isNaN(Number(e.target.value))) {
-      setEditFields((prev) => ({ ...prev, dia_cobro: 0 }));
-    }
-  };
-
-  const toggleEstatus = () => {
-    setEditFields((prev) => ({
-      ...prev,
-      estatus: prev.estatus === "En Vigor" ? "Anulada" : "En Vigor",
-    }));
   };
 
   const handleGuardar = () => {
@@ -139,20 +101,11 @@ const Modal: React.FC<ModalProps> = ({
       const body: Record<string, unknown> = {
         numpoliza: polizaData.num_poliza,
       };
-      if (editFields.dia_cobro !== polizaData.diaCobro) {
-        body.dia_cobro = editFields.dia_cobro;
-      }
       if (editFields.telefono !== (polizaData.telefono ?? "")) {
         body.telefono = editFields.telefono;
       }
       if (editFields.email !== (polizaData.email ?? "")) {
         body.email = editFields.email;
-      }
-      if (editFields.forma_pago !== polizaData.forma_pago) {
-        body.forma_pago = editFields.forma_pago;
-      }
-      if (editFields.estatus !== polizaData.estatus) {
-        body.estatus = editFields.estatus;
       }
 
       const response = await fetch(
@@ -218,8 +171,8 @@ const Modal: React.FC<ModalProps> = ({
                       ? "Flexible"
                       : "Tradicional"}
                   </TipoPolizaBadge>
-                  <StatusBadge $type={editFields.estatus}>
-                    {editFields.estatus}
+                  <StatusBadge $type={polizaData.estatus}>
+                    {polizaData.estatus}
                   </StatusBadge>
                   <CloseBtn onClick={() => setModalOpen(false)}>
                     <Icon iconName="Clear" size={18} isButton={false} />
@@ -244,54 +197,20 @@ const Modal: React.FC<ModalProps> = ({
                     </MetaItem>
                     <MetaItem>
                       <MetaLabel>Día de cobro</MetaLabel>
-                      <EditInput
-                        type="text"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        value={String(
-                          editFields.dia_cobro === 0
-                            ? ""
-                            : editFields.dia_cobro,
-                        )}
-                        placeholder="0"
-                        readOnly={!isSubscribed}
-                        onChange={isSubscribed ? handleDiaCobroChange : undefined}
-                        onFocus={!isSubscribed ? showSubscriptionAlert : undefined}
-                        onBlur={handleDiaCobroBlur}
-                      />
+                      <MetaValue>{polizaData.diaCobro || "—"}</MetaValue>
                     </MetaItem>
                     <MetaItem>
                       <MetaLabel>Forma de pago</MetaLabel>
-                      <EditSelect
-                        value={editFields.forma_pago}
-                        disabled={!isSubscribed}
-                        onChange={isSubscribed ? (e) =>
-                          setEditFields((prev) => ({
-                            ...prev,
-                            forma_pago: e.target.value as FormaPago,
-                          })) : undefined
-                        }
-                        onFocus={!isSubscribed ? showSubscriptionAlert : undefined}
-                      >
-                        {FORMAS_PAGO.map((fp) => (
-                          <option key={fp} value={fp}>
-                            {fp}
-                          </option>
-                        ))}
-                      </EditSelect>
+                      <MetaValue>{polizaData.forma_pago}</MetaValue>
                     </MetaItem>
                     <MetaItem>
                       <MetaLabel>Estatus</MetaLabel>
-                      <EstatusToggle
-                        $active={editFields.estatus === "En Vigor"}
-                        onClick={isSubscribed ? toggleEstatus : showSubscriptionAlert}
-                        type="button"
-                      >
+                      <EstatusDisplay $active={polizaData.estatus === "En Vigor"}>
                         <EstatusIndicator
-                          $active={editFields.estatus === "En Vigor"}
+                          $active={polizaData.estatus === "En Vigor"}
                         />
-                        <span>{editFields.estatus}</span>
-                      </EstatusToggle>
+                        <span>{polizaData.estatus}</span>
+                      </EstatusDisplay>
                     </MetaItem>
                   </SectionMeta>
                 </CounterSection>
@@ -896,13 +815,7 @@ const EditInput = styled.input`
   }
 `;
 
-const EditSelect = styled.select`
-  ${editableBase}
-  cursor: pointer;
-  appearance: auto;
-`;
-
-const EstatusToggle = styled.button<{ $active: boolean }>`
+const EstatusDisplay = styled.div<{ $active: boolean }>`
   display: flex;
   flex-direction: row;
   align-items: center;
@@ -913,14 +826,10 @@ const EstatusToggle = styled.button<{ $active: boolean }>`
     ${(p) => (p.$active ? "rgba(34, 197, 94, 0.4)" : "rgba(239, 68, 68, 0.4)")};
   background-color: ${(p) =>
     p.$active ? "rgba(34, 197, 94, 0.10)" : "rgba(239, 68, 68, 0.10)"};
-  cursor: pointer;
   font-size: 13px;
   font-weight: 600;
   color: ${(p) =>
     p.$active ? "var(--sc-success-color)" : "var(--sc-danger-color)"};
-  transition:
-    background-color 0.15s,
-    border-color 0.15s;
   width: 100%;
 `;
 
