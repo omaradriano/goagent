@@ -3,6 +3,7 @@ import {
   handleAuthByGoogle,
   handleAuthByCredentials,
   handleDeleteSession,
+  handleGetSubscriptionStatus,
 } from "./handlers/auth.js";
 
 import {
@@ -16,6 +17,7 @@ import {
 
 const handlers = {
   "verify-session": handleVerifySession,
+  "get-subscription-status": handleGetSubscriptionStatus,
   "get-polizas-details": handleGetPolizasDetails,
   "get-all-in-db": handleGetAllInDb,
   "post-unique-db": handlePostUniqueDb,

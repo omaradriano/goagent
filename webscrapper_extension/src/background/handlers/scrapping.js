@@ -1,4 +1,5 @@
 import { apiRequest } from "../../shared/api.js";
+import { getSubscriptionStatus } from "../../shared/auth.js";
 import { waitForTabLoad } from "../tab-utils.js";
 
 const LIST_PAGE_URL =
@@ -222,6 +223,33 @@ async function goToListPage(tabId, targetPage) {
   }
 }
 
+const NO_SUBSCRIPTION_MESSAGE =
+  "Se requiere una suscripción activa para sincronizar tu cartera.";
+
+// Verifica el estatus de suscripcion ANTES de tocar el sitio del asegurador
+// (abrir tabs, hacer postback, leer detalle) - el backend ya rechaza el
+// guardado final sin suscripcion activa, pero sin este chequeo la extension
+// igual gastaria minutos recorriendo toda la cartera para nada. Fail-safe:
+// si la consulta de estatus falla (red, etc.), se trata igual que "no
+// suscrito" - no se arriesga a permitir el scraping sin haber podido
+// confirmar la suscripcion. Devuelve true si el flujo debe abortar.
+async function blockIfNoActiveSubscription(originalTabId) {
+  const subscription = await getSubscriptionStatus().catch(() => null);
+  if (subscription?.is_subscribed) return false;
+
+  await chrome.tabs.sendMessage(originalTabId, {
+    action: "show-progress-message",
+    data: {
+      type: "warning",
+      status: "success",
+      message: NO_SUBSCRIPTION_MESSAGE,
+      submessage:
+        "Reactiva tu suscripción desde la aplicación web para continuar.",
+    },
+  });
+  return true;
+}
+
 export async function handleGetPolizasDetails(request, sender, sendResponse) {
   try {
     const data = await apiRequest("/v1/scrapping/details");
@@ -256,6 +284,11 @@ export async function handleGetAllInDb(request, sender, sendResponse) {
 }
 
 export async function handlePostUniqueDb(request, sender, sendResponse) {
+  if (await blockIfNoActiveSubscription(request.tab)) {
+    sendResponse({ success: false, message: NO_SUBSCRIPTION_MESSAGE });
+    return;
+  }
+
   try {
     const checkType = await chrome.tabs.sendMessage(request.tab, {
       action: "get-poliza-type",
@@ -295,6 +328,12 @@ export async function handlePostUniqueDb(request, sender, sendResponse) {
 
 export async function handlePostAllDb(request, sender, sendResponse) {
   const originalTabId = request.tab;
+
+  if (await blockIfNoActiveSubscription(originalTabId)) {
+    sendResponse({ success: false, message: NO_SUBSCRIPTION_MESSAGE });
+    return;
+  }
+
   const completedData = [];
   const failedPolizas = [];
   let refreshedCount = 0;

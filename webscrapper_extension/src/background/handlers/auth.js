@@ -1,11 +1,20 @@
 import { SERVER_URL, FRONTEND_URL } from "../../shared/env.js";
 import { apiRequestPublic } from "../../shared/api.js";
-import { checkSession } from "../../shared/auth.js";
+import { checkSession, getSubscriptionStatus } from "../../shared/auth.js";
 
 export async function handleVerifySession(request, sender, sendResponse) {
   try {
     const session = await checkSession();
     sendResponse({ success: true, data: session });
+  } catch (error) {
+    sendResponse({ success: false, message: error.message });
+  }
+}
+
+export async function handleGetSubscriptionStatus(request, sender, sendResponse) {
+  try {
+    const status = await getSubscriptionStatus();
+    sendResponse({ success: true, data: status });
   } catch (error) {
     sendResponse({ success: false, message: error.message });
   }

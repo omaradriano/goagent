@@ -1,5 +1,6 @@
 import { formatDateDisplay } from "../../shared/dates.js";
 import { filterNewPolizas } from "../../shared/compare.js";
+import { FRONTEND_URL } from "../../shared/env.js";
 
 const CONFIGURED_PAGES = {
   all: "PolizasAgente.aspx",
@@ -39,6 +40,9 @@ function cacheElements() {
   elements.userEmail = document.getElementById("user__email");
   elements.userNoAgente = document.getElementById("user__no_agente");
   elements.logoutBtn = document.getElementById("user__logout");
+  elements.reactivateBtn = document.getElementById(
+    "reactivate_subscription_btn",
+  );
 }
 
 export function setupManagementView(alert, changeView, page, tabId) {
@@ -51,6 +55,9 @@ export function setupManagementView(alert, changeView, page, tabId) {
 
   elements.logoutBtn.addEventListener("click", handleLogout);
   elements.syncBtn.addEventListener("click", handleSync);
+  elements.reactivateBtn.addEventListener("click", () => {
+    chrome.tabs.create({ url: `${FRONTEND_URL}/pricing` });
+  });
 }
 
 export async function loadManagementUI(authRes) {
@@ -99,6 +106,20 @@ export async function loadManagementUI(authRes) {
     elements.syncMessageLabel.innerText =
       "La sesión activa en la extensión no coincide con la sesión de la página. Por favor, verifique que está utilizando la misma cuenta en ambos lugares.";
     elements.syncBtn.style.display = "none";
+    toggleViewDetails("empty");
+    return;
+  }
+
+  const subRes = await chrome.runtime.sendMessage({
+    action: "get-subscription-status",
+  });
+
+  if (!subRes.success || !subRes.data?.is_subscribed) {
+    elements.syncMessageLabel.style.display = "flex";
+    elements.syncMessageLabel.innerText =
+      "Necesitas una suscripción activa para sincronizar tu cartera de pólizas.";
+    elements.syncBtn.style.display = "none";
+    elements.reactivateBtn.style.display = "block";
     toggleViewDetails("empty");
   }
 }

@@ -9,3 +9,8 @@ export async function checkSession() {
     no_agente: data.payload.no_agente,
   };
 }
+
+export async function getSubscriptionStatus() {
+  const data = await apiRequest("/v1/api/subscription_status");
+  return data.payload; // { is_subscribed, cancel_at_period_end, current_period_end }
+}
