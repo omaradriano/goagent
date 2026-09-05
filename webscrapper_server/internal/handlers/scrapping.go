@@ -409,7 +409,7 @@ func ApiPostPoliza(w http.ResponseWriter, r *http.Request) {
 	for _, aseg := range item.Asegurados {
 		isPrincipal := aseg.IsPrincipal
 		pid := int64(poliza.PolizaID)
-		birthday, _ := time.Parse(time.RFC3339, aseg.Cumpleanos)
+		birthday, _ := time.Parse("2006-01-02", aseg.Cumpleanos)
 		var birthdayPtr *time.Time
 		if !birthday.IsZero() {
 			birthdayPtr = &birthday
@@ -1058,7 +1058,7 @@ func ApiPutPoliza(w http.ResponseWriter, r *http.Request) {
 		pid64 := int64(existing.PolizaID)
 		for _, aseg := range item.Asegurados {
 			isPrincipal := aseg.IsPrincipal
-			birthday, _ := time.Parse(time.RFC3339, aseg.Cumpleanos)
+			birthday, _ := time.Parse("2006-01-02", aseg.Cumpleanos)
 			var birthdayPtr *time.Time
 			if !birthday.IsZero() {
 				birthdayPtr = &birthday
