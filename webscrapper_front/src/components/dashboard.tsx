@@ -1,5 +1,5 @@
 import React, { useContext, useEffect, useState } from "react";
-import styled from "styled-components";
+import styled, { keyframes } from "styled-components";
 import {
   AuthContext,
   DataChangedContext,
@@ -41,6 +41,7 @@ const Dashboard: React.FC = () => {
   const [showAnuladasFilter, setAnuladasFilter] = useState(true);
   const [showAnuladasCheckbox, setShowAnuladasCheckbox] = useState(true);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [loadingPolizas, setLoadingPolizas] = useState(true);
 
   const [detailsData, setDetailsData] = useState<{
     total: number;
@@ -119,6 +120,7 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     const loadData = async () => {
+      setLoadingPolizas(true);
       const filtersString = convertFiltersToString({
         ...filters,
         show_anuladas: showAnuladasFilter ? "true" : "false",
@@ -128,6 +130,7 @@ const Dashboard: React.FC = () => {
         setPolizasData(data.payload.items);
         setMaxPages(data.payload.pages || 1);
       }
+      setLoadingPolizas(false);
     };
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -309,13 +312,22 @@ const Dashboard: React.FC = () => {
       </FiltersBar>
 
       {/* Table */}
-      <PolizasContainer
-        data={polizasData}
-        notificationsNotifier={{
-          stateAction: setPolizasChanged,
-          stateValue: polizasChanged,
-        }}
-      />
+      {loadingPolizas ? (
+        <LoadingContainer $isDark={isDark}>
+          <SpinnerIcon>
+            <Icon iconName="Autorenew" size={28} customColor="#155dfc" />
+          </SpinnerIcon>
+          <LoadingText $isDark={isDark}>Cargando pólizas...</LoadingText>
+        </LoadingContainer>
+      ) : (
+        <PolizasContainer
+          data={polizasData}
+          notificationsNotifier={{
+            stateAction: setPolizasChanged,
+            stateValue: polizasChanged,
+          }}
+        />
+      )}
 
       {/* Floating changes toast */}
       <AppliedChangesContainer $visible={polizasChanged.length > 0} $isDark={isDark}>
@@ -399,6 +411,35 @@ const FiltersBar = styled.div<{ $isDark: boolean }>`
       p.$isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)"};
   border-radius: 10px;
   padding: 10px 14px;
+`;
+
+const spin = keyframes`
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+`;
+
+const LoadingContainer = styled.div<{ $isDark: boolean }>`
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 60px 14px;
+  background-color: ${(p) => (p.$isDark ? "var(--bg-dark-header)" : "#ffffff")};
+  border: 1px solid
+    ${(p) => (p.$isDark ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.08)")};
+  border-radius: 10px;
+`;
+
+const SpinnerIcon = styled.div`
+  display: flex;
+  animation: ${spin} 1s linear infinite;
+`;
+
+const LoadingText = styled.p<{ $isDark: boolean }>`
+  font-size: 14px;
+  font-weight: 500;
+  color: ${(p) => (p.$isDark ? "#94a3b8" : "#64748b")};
 `;
 
 const PaginationRow = styled.div`
