@@ -290,6 +290,8 @@ export async function handlePostUniqueDb(request, sender, sendResponse) {
   }
 
   try {
+    const detailUrl = (await chrome.tabs.get(request.tab)).url;
+
     const checkType = await chrome.tabs.sendMessage(request.tab, {
       action: "get-poliza-type",
     });
@@ -307,18 +309,51 @@ export async function handlePostUniqueDb(request, sender, sendResponse) {
       request.payload.ultimo_pago = "No definido";
       request.payload.tipo_poliza = "FLEXIBLE";
       request.payload.flexible = await captureFlexiblePayload(request.tab);
+
+      // captureFlexiblePayload deja la pestana visible del agente en la
+      // subpagina de la anualidad consultada (o en la de historico si fallo
+      // la captura) - se regresa a la vista de detalle general para no dejar
+      // al agente viendo una subpagina intermedia despues del sync manual.
+      await chrome.tabs.update(request.tab, { url: detailUrl });
+      await waitForTabLoad(request.tab);
     } else {
       request.payload.ultimo_pago = "No definido";
     }
 
-    await apiRequest("/v1/scrapping/poliza", {
-      method: "POST",
-      body: JSON.stringify({ ...request.payload }),
+    // Si la poliza ya existe (409), el sync manual de un solo registro no
+    // debe quedarse en un error confuso - se reintenta como refresco
+    // completo (PUT) con los mismos datos ya capturados, igual que ya hace
+    // el flujo de resync de cartera completa para candidatas/mismatches.
+    let mensaje = "Se ha cargado el registro satisfactoriamente.";
+    try {
+      await apiRequest("/v1/scrapping/poliza", {
+        method: "POST",
+        body: JSON.stringify({ ...request.payload }),
+      });
+    } catch (postError) {
+      if (postError.status !== 409) throw postError;
+
+      await apiRequest("/v1/scrapping/poliza", {
+        method: "PUT",
+        body: JSON.stringify({ ...request.payload }),
+      });
+      mensaje =
+        "El registro ya existía; se actualizó con la información más reciente.";
+    }
+
+    await chrome.tabs.sendMessage(request.tab, {
+      action: "show-progress-message",
+      data: {
+        type: "done",
+        status: "success",
+        message: mensaje,
+        submessage: "El registro se ha guardado en la base de datos.",
+      },
     });
 
     sendResponse({
       success: true,
-      message: "Se ha cargado el registro satisfactoriamente.",
+      message: mensaje,
       payload: { ...request.payload },
     });
   } catch (error) {

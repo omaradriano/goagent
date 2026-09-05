@@ -41,7 +41,9 @@ export async function apiRequest(path, options = {}) {
 
   if (!data.success) {
     console.error(`[GoAgent][api] error de negocio en ${path}`, data);
-    throw new Error(data.message);
+    const error = new Error(data.message);
+    error.status = res.status;
+    throw error;
   }
 
   console.log(`[GoAgent][api] ok ${path}`, data);
