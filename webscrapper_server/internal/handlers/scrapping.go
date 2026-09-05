@@ -866,7 +866,7 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 		aseguradosMapa := make(map[string][]dto.Asegurado)
 
 		aseguradosRows, err := sqlDB.Query(`
-			SELECT a.nombre_completo, a.birthday, a.is_principal, p.numpoliza
+			SELECT a.nombre_completo, COALESCE(a.birthday::text, ''), a.is_principal, p.numpoliza
 			FROM asegurados a
 			JOIN polizas p ON a.poliza_id = p.poliza_id
 			WHERE p.poliza_id = ANY($1)`, pq.Array(targetPolizaIDs))
