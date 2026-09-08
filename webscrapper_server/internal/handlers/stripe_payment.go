@@ -35,7 +35,22 @@ func CreateStripeCheckoutSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	agente, err := deps.AgenteRepo.GetSubscriptionStatus(r.Context(), agente_uuid)
+	if err != nil {
+		services.HandleResponseError(http.StatusInternalServerError, "Error consultando suscripción", w)
+		return
+	}
+	if agente.IsSubscribed {
+		services.HandleResponseError(http.StatusConflict, "Ya cuentas con una suscripción activa", w)
+		return
+	}
+
 	priceID := env.Envs.StripePriceID
+
+	scheme := "https"
+	if env.Envs.Mode != "prod" {
+		scheme = "http"
+	}
 
 	params := &stripe.CheckoutSessionParams{
 		Mode: stripe.String(string(stripe.CheckoutSessionModeSubscription)),
@@ -48,8 +63,8 @@ func CreateStripeCheckoutSession(w http.ResponseWriter, r *http.Request) {
 				Quantity: stripe.Int64(1),
 			},
 		},
-		SuccessURL: stripe.String(fmt.Sprintf(`http://%s/success_payment`, env.Envs.StripeRedirectUrl)),
-		CancelURL:  stripe.String(fmt.Sprintf(`http://%s/pricing`, env.Envs.StripeRedirectUrl)),
+		SuccessURL: stripe.String(fmt.Sprintf(`%s://%s/success_payment`, scheme, env.Envs.StripeRedirectUrl)),
+		CancelURL:  stripe.String(fmt.Sprintf(`%s://%s/pricing`, scheme, env.Envs.StripeRedirectUrl)),
 		SubscriptionData: &stripe.CheckoutSessionSubscriptionDataParams{
 			Metadata: map[string]string{
 				"agente_uuid": agente_uuid,
