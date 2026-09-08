@@ -459,7 +459,7 @@ const Modal: React.FC<ModalProps> = ({
                     <Field>
                       <FieldLabel>Código Postal</FieldLabel>
                       <FieldValue>
-                        {polizaData.direccion.codigoPostal}
+                        {polizaData.direccion.codigo_postal}
                       </FieldValue>
                     </Field>
                     <Field>

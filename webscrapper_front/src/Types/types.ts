@@ -17,7 +17,7 @@ export type PolizaGetItem = {
   telefono: string;
   direccion: {
     calle: string;
-    codigoPostal: string;
+    codigo_postal: string;
     ciudad: string;
     estado: string;
     colonia: string;
