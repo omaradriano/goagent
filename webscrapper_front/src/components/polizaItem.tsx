@@ -13,6 +13,7 @@ import {
   textTheme__css,
 } from "../styles/CssComponents";
 import Button from "./button";
+import Icon from "./icon";
 import SpanCard from "./spanCard";
 import CounterCard from "./counterCard.js";
 import { calculateDaysUntilLimit } from "../functions/globalFunctions";
@@ -49,6 +50,7 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
               <TipoPolizaBadgeSmall $type={data.tipo_poliza}>
                 {data.tipo_poliza === "FLEXIBLE" ? "Flexible" : "Tradicional"}
               </TipoPolizaBadgeSmall>
+              {data.comentario && <Icon iconName="Comment" size={20} customColor="#155dfc" />}
             </HeaderLeft>
             <div>
               <CounterCard
@@ -80,7 +82,7 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
         </PolizaItemCustom>
       ) : (
         <PolizaItemCustom $viewMode={viewMode}>
-          <p>{data.num_poliza}</p>
+          <p>{data.num_poliza} {data.comentario && <Icon iconName="Comment" size={18} customColor="#155dfc" />}</p>
           <div>
             <TipoPolizaBadgeSmall $type={data.tipo_poliza}>
               {data.tipo_poliza === "FLEXIBLE" ? "Flexible" : "Tradicional"}

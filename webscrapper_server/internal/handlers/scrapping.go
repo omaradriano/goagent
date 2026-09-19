@@ -499,6 +499,10 @@ func ApiPatchPoliza(w http.ResponseWriter, r *http.Request) {
 		fields["estatus"] = est
 	}
 
+	if item.Comentario != nil {
+		fields["comentario"] = *item.Comentario
+	}
+
 	if len(fields) == 0 {
 		services.HandleResponseError(http.StatusBadRequest, "No se proporcionaron campos para actualizar", w)
 		return
@@ -607,7 +611,8 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 			COALESCE(p.addr_calle, 'No definido'), COALESCE(p.addr_codigopostal, '00000'),
 			COALESCE(p.addr_ciudad, 'No definido'), COALESCE(p.addr_colonia, 'No definido'),
 			COALESCE(p.addr_estado, 'No definido'), COALESCE(p.moneda, ''), COALESCE(p.pais, ''),
-			COALESCE(p.email, ''), COALESCE(p.telefono, ''), ppc.next_payment, p.poliza_id, p.tipo_poliza
+			COALESCE(p.email, ''), COALESCE(p.telefono, ''), ppc.next_payment, p.poliza_id, p.tipo_poliza,
+			COALESCE(p.comentario, '')
 		FROM polizas p
 		JOIN polizas_payments_conf ppc ON p.poliza_id = ppc.poliza_id
 		JOIN agentes a ON p.agente_id = a.agente_id
@@ -617,7 +622,8 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 		&cobranza.NumPoliza, &cobranza.Plan, &cobranza.TipoSeguro,
 		&cobranza.Direccion.Calle, &cobranza.Direccion.CodigoPostal, &cobranza.Direccion.Ciudad,
 		&cobranza.Direccion.Colonia, &cobranza.Direccion.Estado, &cobranza.Moneda, &cobranza.Pais,
-		&cobranza.Email, &cobranza.Telefono, &cobranza.SiguientePago, &polizaID, &cobranza.TipoPoliza)
+		&cobranza.Email, &cobranza.Telefono, &cobranza.SiguientePago, &polizaID, &cobranza.TipoPoliza,
+		&cobranza.Comentario)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			services.HandleResponseError(http.StatusNotFound, "La poliza no está registrada", w)
@@ -814,7 +820,7 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 			ppc.next_payment, COALESCE(p.moneda, ''), COALESCE(p.pais, ''),
 			COALESCE(p.telefono, ''), COALESCE(p.email, ''), COALESCE(p.suma_asegurada, ''),
 			p.last_modified, p.poliza_uuid, COALESCE(ppl.paid_period::text, '') as "payment_exist",
-			p.tipo_poliza` + baseQuery
+			p.tipo_poliza, COALESCE(p.comentario, '')` + baseQuery
 
 	orderBy := `ppc.next_payment ASC`
 	if recent {
@@ -843,7 +849,7 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 			&poliza.Plan, &poliza.TipoSeguro, &poliza.Direccion.Calle, &poliza.Direccion.CodigoPostal, &poliza.Direccion.Ciudad,
 			&poliza.Direccion.Colonia, &poliza.Direccion.Estado, &poliza.SiguientePago, &poliza.Moneda, &poliza.Pais,
 			&poliza.Telefono, &poliza.Email, &poliza.SumaAsegurada, &poliza.UltimaModificacion, &poliza.PolizaUUID,
-			&poliza.PaymentExist, &poliza.TipoPoliza,
+			&poliza.PaymentExist, &poliza.TipoPoliza, &poliza.Comentario,
 		)
 		if err != nil {
 			rows.Close()

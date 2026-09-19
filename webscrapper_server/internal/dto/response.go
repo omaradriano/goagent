@@ -37,6 +37,8 @@ type GetItem_Poliza struct {
 	PolizaUUID    string `json:"poliza_uuid"`
 	TipoPoliza    string `json:"tipo_poliza"`
 
+	Comentario string `json:"comentario"`
+
 	Flexible *GetItem_PolizaFlexible `json:"flexible,omitempty"`
 }
 

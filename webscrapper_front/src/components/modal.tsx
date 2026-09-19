@@ -24,6 +24,7 @@ import { useNavigate } from "react-router";
 interface EditableFields {
   telefono: string;
   email: string;
+  comentario: string;
 }
 
 export interface ModalProps {
@@ -63,6 +64,7 @@ const Modal: React.FC<ModalProps> = ({
   const getInitialFields = () => ({
     telefono: polizaData.telefono ?? "",
     email: polizaData.email ?? "",
+    comentario: polizaData.comentario ?? "",
   });
 
   // Use a key to force remount and reset state when polizaData or modalOpen changes
@@ -84,7 +86,8 @@ const Modal: React.FC<ModalProps> = ({
 
   const hasChanges =
     editFields.telefono !== (polizaData.telefono ?? "") ||
-    editFields.email !== (polizaData.email ?? "");
+    editFields.email !== (polizaData.email ?? "") ||
+    editFields.comentario !== (polizaData.comentario ?? "");
 
   const showSubscriptionAlert = () => {
     alertContext?.setAlertOptions({
@@ -122,6 +125,9 @@ const Modal: React.FC<ModalProps> = ({
       }
       if (editFields.email !== (polizaData.email ?? "")) {
         body.email = editFields.email;
+      }
+      if (editFields.comentario !== (polizaData.comentario ?? "")) {
+        body.comentario = editFields.comentario;
       }
 
       const response = await fetch(
@@ -467,6 +473,26 @@ const Modal: React.FC<ModalProps> = ({
                       <FieldValue>{polizaData.pais}</FieldValue>
                     </Field>
                   </DireccionGrid>
+                </SectionGroup>
+
+                <Divider />
+
+                {/* Comentario */}
+                <SectionGroup>
+                  <SectionLabel>Comentario</SectionLabel>
+                  <EditTextarea
+                    value={editFields.comentario}
+                    placeholder="Agregar comentario..."
+                    rows={3}
+                    readOnly={!isSubscribed}
+                    onChange={isSubscribed ? (e) =>
+                      setEditFields((prev) => ({
+                        ...prev,
+                        comentario: e.target.value,
+                      })) : undefined
+                    }
+                    onFocus={!isSubscribed ? showSubscriptionAlert : undefined}
+                  />
                 </SectionGroup>
               </ModalBody>
 
@@ -911,6 +937,13 @@ const EditInput = styled.input`
     -webkit-appearance: none;
     margin: 0;
   }
+`;
+
+const EditTextarea = styled.textarea`
+  ${editableBase}
+  resize: vertical;
+  min-height: 60px;
+  font-family: inherit;
 `;
 
 const EstatusDisplay = styled.div<{ $active: boolean }>`

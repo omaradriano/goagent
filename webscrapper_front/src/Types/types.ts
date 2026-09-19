@@ -26,6 +26,7 @@ export type PolizaGetItem = {
   poliza_uuid: string;
   payment_exist: string;
   tipo_poliza: PolizaTipoValues;
+  comentario: string;
   flexible?: PolizaFlexible;
 };
 

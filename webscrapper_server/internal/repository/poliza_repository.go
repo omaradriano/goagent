@@ -262,6 +262,7 @@ func polizaAuditSnapshot(p *models.Poliza) map[string]string {
 		"moneda":         p.Moneda,
 		"pais":           p.Pais,
 		"suma_asegurada": p.SumaAsegurada,
+		"comentario":     p.Comentario,
 	}
 	for k, v := range strPtrFields {
 		if v != nil {
