@@ -554,19 +554,6 @@ func ApiGetDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = deps.DB.WithContext(r.Context()).Raw(`
-		SELECT COUNT(*)
-		FROM polizas p
-		JOIN agentes a ON p.agente_id = a.agente_id
-		WHERE a.agente_uuid = ?
-		AND p.last_modified >= NOW() - INTERVAL '7 days'`, userUUID).
-		Scan(&details.Recientes).Error
-	if err != nil {
-		services.Log.ErrorMessage(err.Error())
-		services.HandleResponseError(http.StatusInternalServerError, "Error al recopilar recientes", w)
-		return
-	}
-
 	services.HandleResponseSuccessWithData(details, w)
 }
 
@@ -741,6 +728,13 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 	nombreAsegurado := queryParams.Get("nombre_asegurado")
 	recent := queryParams.Get("recent") == "true"
 
+	if domiciliado := queryParams.Get("domiciliado"); domiciliado != "" {
+		filters.Filters["domiciliado"] = domiciliado
+	}
+	if paymentMonth := queryParams.Get("payment_month"); paymentMonth != "" {
+		filters.Filters["payment_month"] = paymentMonth
+	}
+
 	agenteID, err := deps.AgenteRepo.FindIDByUUID(r.Context(), userUUID)
 	if err != nil {
 		services.Log.ErrorMessage(err.Error())
@@ -780,6 +774,23 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 		}
 		if columna == "next_due" && valor == "true" {
 			baseQuery += fmt.Sprintf(" AND ppc.next_payment <= NOW() + %s", repository.NextDueWindowSQL)
+		} else if columna == "domiciliado" {
+			if valor == "true" {
+				baseQuery += " AND p.medio_cobro IN ('CARGO AUTOMATICO A TARJ CRED', 'TDD')"
+			} else if valor == "false" {
+				baseQuery += " AND p.medio_cobro IN ('AGENTE', 'MODO DIRECTO')"
+			}
+		} else if columna == "payment_month" {
+			monthStart, err := time.Parse("2006-01", valor)
+			if err == nil {
+				monthEnd := monthStart.AddDate(0, 1, 0)
+				argCount++
+				baseQuery += fmt.Sprintf(" AND ppc.next_payment >= $%d", argCount)
+				args = append(args, monthStart)
+				argCount++
+				baseQuery += fmt.Sprintf(" AND ppc.next_payment < $%d", argCount)
+				args = append(args, monthEnd)
+			}
 		} else if columna == "numpoliza" {
 			argCount++
 			baseQuery += fmt.Sprintf(" AND p.numpoliza ILIKE $%d", argCount)

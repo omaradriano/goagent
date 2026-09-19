@@ -226,6 +226,10 @@ const Modal: React.FC<ModalProps> = ({
                       <MetaValue>{polizaData.forma_pago}</MetaValue>
                     </MetaItem>
                     <MetaItem>
+                      <MetaLabel>Medio de cobro</MetaLabel>
+                      <MetaValue>{polizaData.medio_cobro}</MetaValue>
+                    </MetaItem>
+                    <MetaItem>
                       <MetaLabel>Estatus</MetaLabel>
                       <EstatusDisplay $active={polizaData.estatus === "En Vigor"}>
                         <EstatusIndicator

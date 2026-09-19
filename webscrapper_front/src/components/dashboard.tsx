@@ -37,6 +37,7 @@ const Dashboard: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [filters, setFilters] = useState<{ [key: string]: string }>({});
   const [maxPages, setMaxPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
 
   const [showAnuladasFilter, setAnuladasFilter] = useState(true);
   const [showAnuladasCheckbox, setShowAnuladasCheckbox] = useState(true);
@@ -50,7 +51,6 @@ const Dashboard: React.FC = () => {
     inactivas: number;
     sin_pago_registrado: number;
     cobertura_activa: number;
-    recientes: number;
   }>({
     total: 0,
     activas: 0,
@@ -58,8 +58,9 @@ const Dashboard: React.FC = () => {
     inactivas: 0,
     sin_pago_registrado: 0,
     cobertura_activa: 0,
-    recientes: 0,
   });
+  const [domiciliadoFilter, setDomiciliadoFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState("");
 
   function convertFiltersToString(currentFilters: { [key: string]: string }) {
     const entries = Object.entries(currentFilters);
@@ -129,6 +130,7 @@ const Dashboard: React.FC = () => {
       if (data?.payload) {
         setPolizasData(data.payload.items);
         setMaxPages(data.payload.pages || 1);
+        setTotalRecords(data.payload.total || 0);
       }
       setLoadingPolizas(false);
     };
@@ -200,6 +202,8 @@ const Dashboard: React.FC = () => {
             setSearchAseguradoValue("");
             setAnuladasFilter(true);
             setShowAnuladasCheckbox(true);
+            setDomiciliadoFilter("");
+            setMonthFilter("");
           }}
         />
         <StatTag
@@ -213,6 +217,8 @@ const Dashboard: React.FC = () => {
             setSearchAseguradoValue("");
             setAnuladasFilter(true);
             setShowAnuladasCheckbox(false);
+            setDomiciliadoFilter("");
+            setMonthFilter("");
           }}
         />
         <StatTag
@@ -226,6 +232,8 @@ const Dashboard: React.FC = () => {
             setSearchAseguradoValue("");
             setAnuladasFilter(false);
             setShowAnuladasCheckbox(false);
+            setDomiciliadoFilter("");
+            setMonthFilter("");
           }}
         />
         <StatTag
@@ -239,19 +247,8 @@ const Dashboard: React.FC = () => {
             setSearchAseguradoValue("");
             setAnuladasFilter(true);
             setShowAnuladasCheckbox(true);
-          }}
-        />
-        <StatTag
-          amount={detailsData.recientes}
-          title="Modificados recientemente"
-          type="DefaultBlue"
-          filter={() => {
-            setCurrentPage(1);
-            setFilters({ recent: "true" });
-            setSearchValue("");
-            setSearchAseguradoValue("");
-            setAnuladasFilter(true);
-            setShowAnuladasCheckbox(true);
+            setDomiciliadoFilter("");
+            setMonthFilter("");
           }}
         />
       </StatContainer>
@@ -275,6 +272,49 @@ const Dashboard: React.FC = () => {
           placeholder="Buscar asegurado..."
         />
 
+        <FilterSelect
+          $isDark={isDark}
+          value={domiciliadoFilter}
+          onChange={(e) => {
+            const val = e.target.value;
+            setDomiciliadoFilter(val);
+            setCurrentPage(1);
+            setFilters((prev) => {
+              const next = { ...prev };
+              if (val) {
+                next.domiciliado = val;
+              } else {
+                delete next.domiciliado;
+              }
+              return next;
+            });
+          }}
+        >
+          <option value="">Todas</option>
+          <option value="false">No domiciliadas</option>
+          <option value="true">Domiciliadas</option>
+        </FilterSelect>
+
+        <FilterMonthInput
+          $isDark={isDark}
+          type="month"
+          value={monthFilter}
+          onChange={(e) => {
+            const val = e.target.value;
+            setMonthFilter(val);
+            setCurrentPage(1);
+            setFilters((prev) => {
+              const next = { ...prev };
+              if (val) {
+                next.payment_month = val;
+              } else {
+                delete next.payment_month;
+              }
+              return next;
+            });
+          }}
+        />
+
         {showAnuladasCheckbox && (
           <FilterAnuladas htmlFor="hideCanceled" $isDark={isDark}>
             <input
@@ -289,6 +329,9 @@ const Dashboard: React.FC = () => {
         )}
 
         <PaginationRow>
+          <RecordsCount $isDark={isDark}>
+            Mostrando {polizasData.length} de {totalRecords}
+          </RecordsCount>
           <PaginationBtn
             onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
             $isDark={isDark}
@@ -472,12 +515,45 @@ const PaginationBtn = styled.button<{ $isDark: boolean }>`
   }
 `;
 
+const RecordsCount = styled.span<{ $isDark: boolean }>`
+  font-size: 13px;
+  font-weight: 500;
+  color: ${(p) => (p.$isDark ? "#94a3b8" : "#64748b")};
+  white-space: nowrap;
+  margin-right: 8px;
+`;
+
 const PageIndicator = styled.span<{ $isDark: boolean }>`
   font-size: 13px;
   font-weight: 600;
   color: ${(p) => (p.$isDark ? "#94a3b8" : "#64748b")};
   min-width: 52px;
   text-align: center;
+`;
+
+const filterControlBase = `
+  font-size: 13px;
+  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.15s;
+  &:focus { border-color: #155dfc; }
+`;
+
+const FilterSelect = styled.select<{ $isDark: boolean }>`
+  ${filterControlBase}
+  color: ${(p) => (p.$isDark ? "#e2e8f0" : "#374151")};
+  background: ${(p) => (p.$isDark ? "rgba(255,255,255,0.06)" : "#f8fafc")};
+  border: 1px solid ${(p) => (p.$isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)")};
+  cursor: pointer;
+`;
+
+const FilterMonthInput = styled.input<{ $isDark: boolean }>`
+  ${filterControlBase}
+  color: ${(p) => (p.$isDark ? "#e2e8f0" : "#374151")};
+  background: ${(p) => (p.$isDark ? "rgba(255,255,255,0.06)" : "#f8fafc")};
+  border: 1px solid ${(p) => (p.$isDark ? "rgba(255,255,255,0.15)" : "rgba(0,0,0,0.15)")};
 `;
 
 const FilterAnuladas = styled.label<{ $isDark: boolean }>`
