@@ -29,8 +29,8 @@ var pagosPorAnioFormaPago = map[string]int{
 const toleranciaUdis = 5.0
 
 // ajustarFinDeSemana traslada una fecha que cae en fin de semana al
-// siguiente dia habil, igual que fn__set_next_payment/fn_trigger_after_*
-// hacen para las polizas tradicionales: sabado se recorre 2 dias (a lunes),
+// siguiente dia habil, igual que fn__set_next_payment
+// hace para las polizas tradicionales: sabado se recorre 2 dias (a lunes),
 // domingo se recorre 1 dia (a lunes).
 func ajustarFinDeSemana(t time.Time) time.Time {
 	switch t.Weekday() {
@@ -44,8 +44,8 @@ func ajustarFinDeSemana(t time.Time) time.Time {
 }
 
 // aplicarDiaCobro fuerza el dia del mes de "t" a diaCobro (acotado a los
-// dias que tenga ese mes), igual que ya hace fn__set_next_payment/
-// fn_trigger_after_* para polizas tradicionales: dia_cobro, cuando esta
+// dias que tenga ese mes), igual que ya hace fn__set_next_payment
+// para polizas tradicionales: dia_cobro, cuando esta
 // definido (>0), tiene prioridad sobre el dia natural de la fecha calculada.
 // Si diaCobro es 0 (no definido), "t" se deja sin modificar.
 func aplicarDiaCobro(t time.Time, diaCobro int16) time.Time {

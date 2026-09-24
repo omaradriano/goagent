@@ -191,6 +191,7 @@ async function scrapeCurrentDetailPage(tabId) {
     });
     scrapeRes.payload.ultimo_pago =
       recibosRes.data.last_payment ?? "No definido";
+    scrapeRes.payload.sin_pendientes = recibosRes.data.sin_pendientes === true;
     scrapeRes.payload.tipo_poliza = "TRADICIONAL";
   } else if (typeCheck.data.poliza_type_res === "historicoaportaciones") {
     await waitForTabLoad(tabId);
@@ -303,21 +304,25 @@ export async function handlePostUniqueDb(request, sender, sendResponse) {
       });
       request.payload.ultimo_pago =
         recibosRes.data.last_payment ?? "No definido";
+      request.payload.sin_pendientes =
+        recibosRes.data.sin_pendientes === true;
       request.payload.tipo_poliza = "TRADICIONAL";
     } else if (checkType.data.poliza_type_res === "historicoaportaciones") {
       await waitForTabLoad(request.tab);
       request.payload.ultimo_pago = "No definido";
       request.payload.tipo_poliza = "FLEXIBLE";
       request.payload.flexible = await captureFlexiblePayload(request.tab);
-
-      // captureFlexiblePayload deja la pestana visible del agente en la
-      // subpagina de la anualidad consultada (o en la de historico si fallo
-      // la captura) - se regresa a la vista de detalle general para no dejar
-      // al agente viendo una subpagina intermedia despues del sync manual.
-      await chrome.tabs.update(request.tab, { url: detailUrl });
-      await waitForTabLoad(request.tab);
     } else {
       request.payload.ultimo_pago = "No definido";
+    }
+
+    // get-poliza-type navega a Recibos (tradicional) o Historico (flexible), y
+    // captureFlexiblePayload puede dejar la pestana en la subpagina de una
+    // anualidad - se regresa a la vista de detalle donde el agente inicio el
+    // sync para no dejarlo viendo una subpagina intermedia.
+    if (checkType.data.poliza_type_res) {
+      await chrome.tabs.update(request.tab, { url: detailUrl });
+      await waitForTabLoad(request.tab);
     }
 
     // Si la poliza ya existe (409), el sync manual de un solo registro no

@@ -140,7 +140,10 @@ function handleGetRecibosLastPayment(request, sender, sendResponse) {
   if (result.success) {
     sendResponse({
       success: true,
-      data: { last_payment: result.last_payment },
+      data: {
+        last_payment: result.last_payment,
+        sin_pendientes: result.sin_pendientes === true,
+      },
       message: "Se ha obtenido la ultima fecha de pago",
     });
   } else {

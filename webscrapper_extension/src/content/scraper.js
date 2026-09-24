@@ -138,8 +138,11 @@ export function getLastPendingPaymentDate() {
     return statusCell && statusCell.innerText.trim() === "Pendiente";
   });
 
+  // Hay recibos pero ninguno pendiente: el cliente esta al corriente y el
+  // siguiente recibo aun no se emite. El backend recalcula next_payment desde
+  // fecha_emision/dia_cobro en vez de dejar la fecha vieja.
   if (pendingRows.length === 0) {
-    return { success: false, last_payment: null };
+    return { success: true, last_payment: null, sin_pendientes: true };
   }
 
   const rowWithMinDate = pendingRows.reduce((minRow, currentRow) => {

@@ -73,23 +73,31 @@ func syncFlexiblePoliza(ctx context.Context, polizaID int64, formaPago string, d
 // polizas_payments_conf.next_payment a partir del ultimo_pago scrapeado de
 // una poliza tradicional individual - version de un solo item de la logica
 // que ya existe inline en la query UNNEST de ApiPostPolizas para el batch
-// completo. No-op si ultimoPago viene vacio/"null"/no parseable, igual que
-// el comportamiento actual del bulk (esas polizas simplemente no entran al
-// UNNEST).
-func syncTradicionalUltimoPago(ctx context.Context, polizaID int64, ultimoPago string) error {
-	if ultimoPago == "" || ultimoPago == "null" {
-		return nil
+// completo. Si ultimoPago no es una fecha valida pero la extension confirmo
+// que no hay recibos pendientes (sinPendientes), se recalcula desde
+// fecha_emision/dia_cobro con fn__set_next_payment. En cualquier otro caso
+// (vacio/"null"/"No definido" sin confirmacion) es no-op.
+func syncTradicionalUltimoPago(ctx context.Context, polizaID int64, ultimoPago string, sinPendientes bool) error {
+	if fecha, ok := parseUltimoPago(ultimoPago); ok {
+		return deps.PolizaRepo.UpsertNextPayment(ctx, polizaID, fecha)
 	}
+	if sinPendientes {
+		return deps.PolizaRepo.RecalcNextPaymentFromEmision(ctx, polizaID)
+	}
+	return nil
+}
+
+// parseUltimoPago convierte "YYYY-MM-DD" a mediodia UTC.
+func parseUltimoPago(ultimoPago string) (time.Time, bool) {
 	parts := strings.Split(ultimoPago, "-")
 	if len(parts) != 3 {
-		return nil
+		return time.Time{}, false
 	}
 	year, errY := strconv.Atoi(parts[0])
 	month, errM := strconv.Atoi(parts[1])
 	day, errD := strconv.Atoi(parts[2])
 	if errY != nil || errM != nil || errD != nil {
-		return nil
+		return time.Time{}, false
 	}
-	fecha := time.Date(year, time.Month(month), day, 12, 0, 0, 0, time.UTC)
-	return deps.PolizaRepo.UpsertNextPayment(ctx, polizaID, fecha)
+	return time.Date(year, time.Month(month), day, 12, 0, 0, 0, time.UTC), true
 }

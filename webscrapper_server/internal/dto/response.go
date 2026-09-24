@@ -29,7 +29,6 @@ type GetItem_Poliza struct {
 	Telefono           string      `json:"telefono"`
 	SumaAsegurada      string      `json:"suma_asegurada"`
 	UltimaModificacion string      `json:"last_modified"`
-	PaymentExist       string      `json:"payment_exist"`
 
 	Direccion Address `json:"direccion"`
 
@@ -109,10 +108,8 @@ type SubscriptionStatusPayload struct {
 }
 
 type PolizasUserDetails struct {
-	Total             int `json:"total"`
-	Activas           int `json:"activas"`
-	Inactivas         int `json:"inactivas"`
-	PorVencer         int `json:"por_vencer"`
-	CoberturaActiva   int `json:"cobertura_activa"`
-	SinPagoRegistrado int `json:"sin_pago_registrado"`
+	Total     int `json:"total"`
+	Activas   int `json:"activas"`
+	Inactivas int `json:"inactivas"`
+	PorVencer int `json:"por_vencer"`
 }

@@ -19,6 +19,7 @@ type PostItem_Poliza struct {
 	Email         string                   `json:"email"`
 	Moneda        string                   `json:"moneda"`
 	UltimoPago    string                   `json:"ultimo_pago"`
+	SinPendientes bool                     `json:"sin_pendientes"`
 	TipoPoliza    string                   `json:"tipo_poliza"`
 	Flexible      *PostItem_PolizaFlexible `json:"flexible,omitempty"`
 }
@@ -45,10 +46,8 @@ type PatchItem_Agente struct {
 
 type PatchItem_Poliza struct {
 	NumPoliza  string  `json:"numpoliza"`
-	DiaCobro   *int16  `json:"dia_cobro,omitempty"`
 	Telefono   *string `json:"telefono,omitempty"`
 	Email      *string `json:"email,omitempty"`
-	FormaPago  *string `json:"forma_pago,omitempty"`
 	Estatus    *string `json:"estatus,omitempty"`
 	Comentario *string `json:"comentario,omitempty"`
 }

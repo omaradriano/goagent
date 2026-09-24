@@ -458,14 +458,6 @@ func ApiPatchPoliza(w http.ResponseWriter, r *http.Request) {
 
 	fields := make(map[string]interface{})
 
-	if item.DiaCobro != nil {
-		if *item.DiaCobro < 0 || *item.DiaCobro > 31 {
-			services.HandleResponseError(http.StatusBadRequest, "Día de cobro inválido (debe ser entre 0 y 31)", w)
-			return
-		}
-		fields["dia_cobro"] = *item.DiaCobro
-	}
-
 	if item.Telefono != nil {
 		fields["telefono"] = *item.Telefono
 	}
@@ -479,15 +471,6 @@ func ApiPatchPoliza(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		fields["email"] = email
-	}
-
-	if item.FormaPago != nil {
-		fp := *item.FormaPago
-		if fp != "MENSUAL" && fp != "TRIMESTRAL" && fp != "SEMESTRAL" && fp != "ANUAL" {
-			services.HandleResponseError(http.StatusBadRequest, "Forma de pago inválida (MENSUAL, TRIMESTRAL, SEMESTRAL, ANUAL)", w)
-			return
-		}
-		fields["forma_pago"] = fp
 	}
 
 	if item.Estatus != nil {
@@ -535,18 +518,11 @@ func ApiGetDetails(w http.ResponseWriter, r *http.Request) {
 			COALESCE(COUNT(*), 0) as total,
 			COALESCE(COUNT(CASE WHEN p.estatus = 'En Vigor' THEN 1 END), 0) as activas,
 			COALESCE(COUNT(CASE WHEN p.estatus != 'En Vigor' THEN 1 END), 0) as inactivas,
-			COALESCE(COUNT(CASE WHEN ppc.next_payment <= CURRENT_DATE + %s AND p.estatus != 'Anulada' THEN 1 END), 0) as por_vencer,
-			COALESCE(COUNT(CASE WHEN ppc.next_payment >= CURRENT_DATE + %s AND ppl.paid_period IS NOT NULL THEN 1 END), 0) as cobertura_activa,
-			COALESCE(COUNT(CASE WHEN ppl.paid_period IS NULL THEN 1 END), 0) as sin_pago_registrado
+			COALESCE(COUNT(CASE WHEN ppc.next_payment <= CURRENT_DATE + %s AND p.estatus != 'Anulada' THEN 1 END), 0) as por_vencer
 		FROM polizas p
 		JOIN agentes a ON p.agente_id = a.agente_id
 		JOIN polizas_payments_conf ppc ON p.poliza_id = ppc.poliza_id
-		LEFT JOIN (
-				SELECT DISTINCT ON (poliza_id) poliza_id, paid_period
-				FROM polizas_payments_log
-				ORDER BY poliza_id, payment_log_id DESC
-			) ppl ON ppl.poliza_id = p.poliza_id
-		WHERE a.agente_uuid = ?`, repository.NextDueWindowSQL, repository.NextDueWindowSQL), userUUID).
+		WHERE a.agente_uuid = ?`, repository.NextDueWindowSQL), userUUID).
 		Scan(&details).Error
 	if err != nil {
 		services.Log.ErrorMessage(err.Error())
@@ -752,12 +728,7 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 
 	joinClause := ` FROM polizas p
 		JOIN agentes a ON p.agente_id = a.agente_id
-		JOIN polizas_payments_conf ppc ON ppc.poliza_id=p.poliza_id
-		LEFT JOIN (
-			SELECT DISTINCT ON (poliza_id) poliza_id, paid_period
-			FROM polizas_payments_log
-			ORDER BY poliza_id, payment_log_id DESC
-		) ppl ON ppl.poliza_id = p.poliza_id`
+		JOIN polizas_payments_conf ppc ON ppc.poliza_id=p.poliza_id`
 
 	if nombreAsegurado != "" {
 		joinClause += ` JOIN asegurados a_filter ON a_filter.poliza_id = p.poliza_id AND a_filter.is_principal = true`
@@ -830,7 +801,7 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 			COALESCE(p.addr_estado, 'No definido'),
 			ppc.next_payment, COALESCE(p.moneda, ''), COALESCE(p.pais, ''),
 			COALESCE(p.telefono, ''), COALESCE(p.email, ''), COALESCE(p.suma_asegurada, ''),
-			p.last_modified, p.poliza_uuid, COALESCE(ppl.paid_period::text, '') as "payment_exist",
+			p.last_modified, p.poliza_uuid,
 			p.tipo_poliza, COALESCE(p.comentario, '')` + baseQuery
 
 	orderBy := `ppc.next_payment ASC`
@@ -860,7 +831,7 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 			&poliza.Plan, &poliza.TipoSeguro, &poliza.Direccion.Calle, &poliza.Direccion.CodigoPostal, &poliza.Direccion.Ciudad,
 			&poliza.Direccion.Colonia, &poliza.Direccion.Estado, &poliza.SiguientePago, &poliza.Moneda, &poliza.Pais,
 			&poliza.Telefono, &poliza.Email, &poliza.SumaAsegurada, &poliza.UltimaModificacion, &poliza.PolizaUUID,
-			&poliza.PaymentExist, &poliza.TipoPoliza, &poliza.Comentario,
+			&poliza.TipoPoliza, &poliza.Comentario,
 		)
 		if err != nil {
 			rows.Close()
@@ -1105,7 +1076,7 @@ func ApiPutPoliza(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		if err := syncTradicionalUltimoPago(r.Context(), polizaID, item.UltimoPago); err != nil {
+		if err := syncTradicionalUltimoPago(r.Context(), polizaID, item.UltimoPago, item.SinPendientes); err != nil {
 			services.Log.ErrorMessage(err.Error())
 			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
 			return

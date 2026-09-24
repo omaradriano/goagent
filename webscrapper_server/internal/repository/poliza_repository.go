@@ -14,23 +14,6 @@ import (
 // que la usa ya tenga un JOIN a "agentes a".
 const NextDueWindowSQL = "make_interval(days => a.daysuntiladvice)"
 
-type PolizaFilters struct {
-	AgenteID    int
-	Filters     map[string]string
-	PageSize    int
-	CurrentPage int
-}
-
-type PolizaDetails struct {
-	Total             int
-	Activas           int
-	Inactivas         int
-	PorVencer         int
-	CoberturaActiva   int
-	SinPagoRegistrado int
-	Recientes         int
-}
-
 type BirthdateResult struct {
 	NombreCompleto string
 	NextBirthday   string
@@ -40,16 +23,15 @@ type BirthdateResult struct {
 type PolizaRepository interface {
 	FindByNumPoliza(ctx context.Context, numPoliza string, agenteID int) (*models.Poliza, error)
 	GetNumPolizasByAgenteUUID(ctx context.Context, uuid string) ([]string, error)
-	GetDetails(ctx context.Context, agenteUUID string) (*PolizaDetails, error)
 	BulkCreate(ctx context.Context, polizas []models.Poliza, asegurados [][]models.Asegurado) ([]int64, []string, error)
 	CreateSingle(ctx context.Context, poliza *models.Poliza) error
 	FindPolizaIDByNumPoliza(ctx context.Context, numPoliza string) (int, error)
 	GetPolizaWithAsegurados(ctx context.Context, numPoliza string, agenteID int) (*models.Poliza, error)
-	GetPolizasPaginated(ctx context.Context, filters PolizaFilters) ([]map[string]any, int64, error)
 	GetBirthdates(ctx context.Context, agenteID int) ([]BirthdateResult, error)
 	UpdatePolizaFields(ctx context.Context, numPoliza string, agenteID int, fields map[string]interface{}, auditRepo AuditRepository) error
 	UpdatePolizaFieldsByID(ctx context.Context, polizaID int, fields map[string]interface{}, changedBy int, auditRepo AuditRepository) error
 	UpsertNextPayment(ctx context.Context, polizaID int64, nextPayment time.Time) error
+	RecalcNextPaymentFromEmision(ctx context.Context, polizaID int64) error
 	GetResyncCandidateNums(ctx context.Context, agenteID int) ([]string, error)
 	GetAllNumPolizaEstatus(ctx context.Context, agenteID int) ([]NumEstatus, error)
 }
@@ -88,40 +70,6 @@ func (r *polizaRepository) GetNumPolizasByAgenteUUID(ctx context.Context, uuid s
 		Where("a.agente_uuid = ?", uuid).
 		Pluck("numpoliza", &results).Error
 	return results, err
-}
-
-func (r *polizaRepository) GetDetails(ctx context.Context, agenteUUID string) (*PolizaDetails, error) {
-	var details PolizaDetails
-
-	err := r.db.WithContext(ctx).Raw(`
-		SELECT
-			COUNT(*) as total,
-			SUM(CASE WHEN p.estatus = 'ACTIVO' THEN 1 ELSE 0 END) as activas,
-			SUM(CASE WHEN p.estatus = 'INACTIVO' THEN 1 ELSE 0 END) as inactivas,
-			SUM(CASE WHEN ppc.next_payment IS NOT NULL AND ppc.next_payment <= NOW() + INTERVAL '30 days' AND p.estatus = 'ACTIVO' THEN 1 ELSE 0 END) as por_vencer,
-			SUM(CASE WHEN p.estatus = 'ACTIVO' AND ppc.next_payment IS NOT NULL AND ppc.next_payment > NOW() THEN 1 ELSE 0 END) as cobertura_activa,
-			SUM(CASE WHEN ppl.payment_log_id IS NULL THEN 1 ELSE 0 END) as sin_pago_registrado
-		FROM polizas p
-		JOIN agentes a ON p.agente_id = a.agente_id
-		JOIN polizas_payments_conf ppc ON ppc.poliza_id = p.poliza_id
-		LEFT JOIN polizas_payments_log ppl ON ppl.poliza_id = p.poliza_id
-		WHERE a.agente_uuid = ?`, agenteUUID).
-		Scan(&details).Error
-	if err != nil {
-		return nil, err
-	}
-
-	err = r.db.WithContext(ctx).Raw(`
-		SELECT COUNT(*) as recientes
-		FROM polizas p
-		JOIN agentes a ON p.agente_id = a.agente_id
-		WHERE a.agente_uuid = ? AND p.fecha_emision >= NOW() - INTERVAL '30 days'`, agenteUUID).
-		Scan(&details.Recientes).Error
-	if err != nil {
-		return nil, err
-	}
-
-	return &details, nil
 }
 
 func (r *polizaRepository) BulkCreate(ctx context.Context, polizas []models.Poliza, asegurados [][]models.Asegurado) ([]int64, []string, error) {
@@ -179,59 +127,6 @@ func (r *polizaRepository) GetPolizaWithAsegurados(ctx context.Context, numPoliz
 		return nil, err
 	}
 	return &poliza, nil
-}
-
-func (r *polizaRepository) GetPolizasPaginated(ctx context.Context, filters PolizaFilters) ([]map[string]any, int64, error) {
-	var totalRecords int64
-
-	baseQuery := r.db.WithContext(ctx).
-		Model(&models.Poliza{}).
-		Joins("JOIN agentes a ON polizas.agente_id = a.agente_id").
-		Joins("JOIN polizas_payments_conf ppc ON ppc.poliza_id = polizas.poliza_id").
-		Joins("LEFT JOIN polizas_payments_log ppl ON ppl.poliza_id = polizas.poliza_id").
-		Where("a.agente_id = ?", filters.AgenteID)
-
-	for col, val := range filters.Filters {
-		switch col {
-		case "estatus":
-			baseQuery = baseQuery.Where("polizas.estatus = ?", val)
-		case "numpoliza":
-			baseQuery = baseQuery.Where("polizas.numpoliza ILIKE ?", "%"+val+"%")
-		case "next_due":
-			baseQuery = baseQuery.Where("ppc.next_payment <= NOW() + INTERVAL '30 days' AND polizas.estatus = 'ACTIVO'")
-		case "asegurado":
-			baseQuery = baseQuery.
-				Joins("JOIN asegurados aseg ON aseg.poliza_id = polizas.poliza_id").
-				Where("aseg.nombre_completo ILIKE ?", "%"+val+"%")
-		}
-	}
-
-	if err := baseQuery.Count(&totalRecords).Error; err != nil {
-		return nil, 0, err
-	}
-
-	offset := (filters.CurrentPage - 1) * filters.PageSize
-
-	var results []map[string]any
-	err := baseQuery.
-		Select(`polizas.poliza_id, polizas.dia_cobro, polizas.estatus, polizas.fecha_emision,
-			polizas.forma_pago, polizas.medio_cobro, polizas.numpoliza, polizas.plan,
-			polizas.tipo_seguro, polizas.addr_calle, polizas.addr_codigopostal,
-			polizas.addr_ciudad, polizas.addr_colonia, polizas.addr_estado,
-			ppc.next_payment, polizas.moneda, polizas.pais, polizas.telefono,
-			polizas.email, polizas.suma_asegurada, polizas.last_modified,
-			polizas.poliza_uuid,
-			CASE WHEN ppl.payment_log_id IS NOT NULL THEN 'true' ELSE 'false' END as payment_exist`).
-		Group("polizas.poliza_id, ppc.payment_conf_id, ppl.payment_log_id").
-		Order("polizas.poliza_id DESC").
-		Limit(filters.PageSize).
-		Offset(offset).
-		Find(&results).Error
-	if err != nil {
-		return nil, 0, err
-	}
-
-	return results, totalRecords, err
 }
 
 // polizaAuditSnapshot captura el valor "antes" de cada columna actualizable
@@ -359,6 +254,32 @@ func (r *polizaRepository) UpsertNextPayment(ctx context.Context, polizaID int64
 
 	pid := polizaID
 	return r.db.WithContext(ctx).Create(&models.PaymentConf{PolizaID: &pid, NextPayment: &nextPayment}).Error
+}
+
+// RecalcNextPaymentFromEmision recalcula next_payment con el procedimiento
+// fn__set_next_payment partiendo de la fecha_emision guardada (mismo calculo
+// que el trigger de alta): avanza por forma_pago hasta pasar NOW(), aplica
+// dia_cobro y ajuste de fin de semana. Se usa en polizas tradicionales sin
+// recibos pendientes, donde no hay fecha de recibo que tomar.
+func (r *polizaRepository) RecalcNextPaymentFromEmision(ctx context.Context, polizaID int64) error {
+	// Postgres no permite subqueries como argumentos de CALL, por eso se leen
+	// antes uuid y fecha_emision.
+	var row struct {
+		PolizaUUID   string
+		FechaEmision time.Time
+	}
+	err := r.db.WithContext(ctx).Raw(
+		"SELECT poliza_uuid, fecha_emision FROM polizas WHERE poliza_id = ?", polizaID,
+	).Scan(&row).Error
+	if err != nil {
+		return err
+	}
+	if row.PolizaUUID == "" {
+		return fmt.Errorf("no se encontro la poliza %d para recalcular next_payment", polizaID)
+	}
+	return r.db.WithContext(ctx).Exec(
+		"CALL fn__set_next_payment(?::uuid, ?::timestamptz)", row.PolizaUUID, row.FechaEmision,
+	).Error
 }
 
 // GetResyncCandidateNums devuelve los numpoliza cuyo next_payment cae dentro

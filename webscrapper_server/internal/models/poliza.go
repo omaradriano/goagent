@@ -36,7 +36,6 @@ type Poliza struct {
 	Agente            *Agente                  `gorm:"foreignKey:AgenteID" json:"agente,omitempty"`
 	Asegurados        []Asegurado              `gorm:"foreignKey:PolizaID" json:"asegurados,omitempty"`
 	PaymentConf       *PaymentConf             `gorm:"foreignKey:PolizaID" json:"payment_conf,omitempty"`
-	PaymentLogs       []PaymentLog             `gorm:"foreignKey:PolizaID" json:"payment_logs,omitempty"`
 	FlexibleAnualidad *PolizaFlexibleAnualidad `gorm:"foreignKey:PolizaID" json:"flexible_anualidad,omitempty"`
 	FlexiblePagos     []PolizaFlexiblePago     `gorm:"foreignKey:PolizaID" json:"flexible_pagos,omitempty"`
 }

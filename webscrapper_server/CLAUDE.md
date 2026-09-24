@@ -66,7 +66,9 @@ All variables are required (see `env/envconf.go`):
 
 ## Database
 
-Schema is in `webscrapperdb.sql`. Raw SQL queries throughout — no ORM. The main tables are `agentes` (users) and `polizas` (insurance policies).
+Schema lives in `migrations/` (golang-migrate, numbered `NNNNNN_name.up.sql`/`.down.sql`); the current schema is the result of applying them in order. Never edit an already-applied migration — add a new one. Data access mixes GORM (`internal/repository/`) and raw SQL in handlers. The main tables are `agentes` (users) and `polizas` (insurance policies).
+
+`polizas_payments_conf.next_payment` is set only by the extension sync (pending receipt date, or `fn__set_next_payment` from `fecha_emision`/`dia_cobro` when there are no pending receipts) and by the `trg_after_insert` trigger on new policies. There is no manual payment logging or manual `dia_cobro`/`forma_pago` editing.
 
 ## Notes
 

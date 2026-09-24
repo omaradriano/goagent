@@ -49,15 +49,11 @@ const Dashboard: React.FC = () => {
     activas: number;
     por_vencer: number;
     inactivas: number;
-    sin_pago_registrado: number;
-    cobertura_activa: number;
   }>({
     total: 0,
     activas: 0,
     por_vencer: 0,
     inactivas: 0,
-    sin_pago_registrado: 0,
-    cobertura_activa: 0,
   });
   const [domiciliadoFilter, setDomiciliadoFilter] = useState("");
   const [monthFilter, setMonthFilter] = useState("");
@@ -162,7 +158,7 @@ const Dashboard: React.FC = () => {
           <BannerLeft>
             <Icon iconName="LockOutlined" size={20} customColor="#d97706" />
             <BannerText>
-              No tienes una suscripción activa. El registro de pagos y el calendario están deshabilitados.
+              No tienes una suscripción activa. La sincronización de pólizas y el calendario están deshabilitados.
             </BannerText>
           </BannerLeft>
           <BannerAction onClick={() => navigate("/pricing")}>
