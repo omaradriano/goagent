@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"regexp"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -136,20 +137,32 @@ func EnableCORS(next http.Handler) http.Handler {
 	return CORSMiddleware(next)
 }
 
+var allowedOrigins = map[string]bool{
+	"http://localhost:5173":                               true,
+	"http://localhost:5174":                               true,
+	"https://www.goagent.com.mx":                          true,
+	"https://goagent.com.mx":                              true,
+	"chrome-extension://bnhggcmlbinhmheijhmlfjoefgldkpdp": true,
+	"chrome-extension://jgahlmealgaocieaemladngafmbbfgdo": true,
+	"chrome-extension://acihafkligkgjbhmbgaidkackhojbokh": true,
+}
+
+// vercelOriginRe acepta los despliegues del frontend en Vercel (QA/preview),
+// cuya URL cambia en cada deploy: alias de rama (-git-qa-) y URLs por
+// despliegue (-mf6izhav7-). Limitado al scope del equipo omaradrianos-projects.
+var vercelOriginRe = regexp.MustCompile(`^https://cobranzas?webscrapper-front-[a-z0-9-]+-omaradrianos-projects\.vercel\.app$`)
+
+func isAllowedOrigin(origin string) bool {
+	return allowedOrigins[origin] || vercelOriginRe.MatchString(origin)
+}
+
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 
-		if origin == "http://localhost:5173" ||
-			origin == "http://localhost:5174" ||
-			origin == "https://www.goagent.com.mx" ||
-			origin == "https://goagent.com.mx" ||
-			origin == "https://cobranzaswebscrapper-front-git-qa-omaradrianos-projects.vercel.app" ||
-			origin == "chrome-extension://bnhggcmlbinhmheijhmlfjoefgldkpdp" ||
-			origin == "chrome-extension://jgahlmealgaocieaemladngafmbbfgdo" ||
-			origin == "chrome-extension://acihafkligkgjbhmbgaidkackhojbokh" {
-
+		if isAllowedOrigin(origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
 		}
 
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
