@@ -1,0 +1,1354 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GoAgent — Gestión Inteligente de Pólizas</title>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* === CSS CUSTOM PROPERTIES === */
+        :root {
+            --stage-bg: #fdfae7;
+            --slide-bg: #fdfae7;
+            --primary: #155dfc;
+            --primary-light: rgba(21, 93, 252, 0.08);
+            --primary-border: rgba(21, 93, 252, 0.2);
+            --primary-glow: rgba(21, 93, 252, 0.12);
+            --text-dark: #111111;
+            --text-muted: #6B6B6B;
+            --text-light: #999999;
+            --white: #ffffff;
+            --red: #e53e3e;
+            --green: #38a169;
+            --orange: #dd6b20;
+
+            --font-display: 'Space Grotesk', sans-serif;
+            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        /* === RESET === */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* === VIEWPORT BASE (MANDATORY) === */
+        html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--stage-bg); }
+        .deck-viewport { position: fixed; inset: 0; overflow: hidden; background: var(--stage-bg); }
+        .deck-stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden; transform-origin: 0 0; background: var(--slide-bg); }
+        .slide { position: absolute; inset: 0; width: 1920px; height: 1080px; overflow: hidden; display: block; visibility: hidden; opacity: 0; pointer-events: none; background: var(--slide-bg); font-family: var(--font-display); }
+        .slide.active, .slide.visible { visibility: visible; opacity: 1; pointer-events: auto; z-index: 1; }
+        img, video, canvas, svg { max-width: 100%; max-height: 100%; }
+        @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.2s !important; } }
+        @media print {
+            html, body { width: 1920px; height: auto; overflow: visible; background: #fff; }
+            .deck-viewport { position: static; overflow: visible; background: #fff; }
+            .deck-stage { position: static; width: auto; height: auto; transform: none !important; background: none; }
+            .slide { position: relative; display: block !important; visibility: visible !important; opacity: 1 !important; pointer-events: auto !important; width: 1920px; height: 1080px; break-after: page; page-break-after: always; }
+            .slide:last-child { break-after: auto; page-break-after: auto; }
+            .deck-controls, .speaker-notes-panel, .edit-hotzone, .edit-toggle { display: none !important; }
+        }
+
+        /* === ACCENT LINE (top of every slide) === */
+        .accent-line { position: fixed; top: 0; left: 0; width: 100%; height: 5px; background: var(--primary); z-index: 9998; }
+
+        /* === REVEAL ANIMATIONS === */
+        .reveal { opacity: 0; transform: translateY(28px); transition: opacity 0.7s var(--ease-out-expo), transform 0.7s var(--ease-out-expo); }
+        .slide.visible .reveal { opacity: 1; transform: translateY(0); }
+        .slide.visible .reveal:nth-child(1) { transition-delay: 0.1s; }
+        .slide.visible .reveal:nth-child(2) { transition-delay: 0.2s; }
+        .slide.visible .reveal:nth-child(3) { transition-delay: 0.3s; }
+        .slide.visible .reveal:nth-child(4) { transition-delay: 0.4s; }
+        .slide.visible .reveal:nth-child(5) { transition-delay: 0.5s; }
+        .slide.visible .reveal:nth-child(6) { transition-delay: 0.6s; }
+
+        /* === SLIDE LAYOUTS === */
+        .slide-content {
+            padding: 100px 140px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .eyebrow {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--primary);
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            margin-bottom: 32px;
+        }
+
+        .slide-title {
+            font-size: 72px;
+            font-weight: 700;
+            color: var(--text-dark);
+            line-height: 1.1;
+            margin-bottom: 28px;
+        }
+
+        .slide-title .highlight { color: var(--primary); }
+
+        .slide-subtitle {
+            font-size: 26px;
+            font-weight: 400;
+            color: var(--text-muted);
+            line-height: 1.6;
+            max-width: 1000px;
+        }
+
+        /* === TITLE SLIDE === */
+        .title-slide .slide-content { padding: 120px 140px; }
+        .title-slide .slide-title { font-size: 96px; margin-bottom: 32px; }
+        .title-slide .slide-subtitle { font-size: 28px; }
+
+        /* === BOTTOM BAR === */
+        .bottom-bar {
+            position: absolute;
+            bottom: 50px;
+            left: 140px;
+            right: 140px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .pill {
+            background: var(--primary-light);
+            color: var(--primary);
+            padding: 10px 28px;
+            border-radius: 100px;
+            font-size: 14px;
+            font-weight: 600;
+            border: 1.5px solid var(--primary-border);
+            font-family: var(--font-display);
+        }
+
+        .slide-number {
+            font-size: 14px;
+            color: var(--text-light);
+            font-weight: 500;
+            font-family: var(--font-display);
+        }
+
+        /* === BULLET LIST === */
+        .bullet-list {
+            list-style: none;
+            margin-top: 20px;
+        }
+
+        .bullet-list li {
+            font-size: 28px;
+            color: var(--text-dark);
+            line-height: 1.5;
+            padding: 14px 0;
+            padding-left: 36px;
+            position: relative;
+        }
+
+        .bullet-list li::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 24px;
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            background: var(--primary);
+        }
+
+        .bullet-list li .sub {
+            display: block;
+            font-size: 22px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        /* === STAT CARDS === */
+        .stat-row {
+            display: flex;
+            gap: 32px;
+            margin-top: 40px;
+        }
+
+        .stat-card {
+            flex: 1;
+            background: var(--white);
+            border-radius: 16px;
+            padding: 36px 32px;
+            border: 1.5px solid rgba(0,0,0,0.06);
+            text-align: center;
+        }
+
+        .stat-card .stat-icon {
+            font-size: 40px;
+            margin-bottom: 16px;
+        }
+
+        .stat-card .stat-label {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+
+        .stat-card .stat-desc {
+            font-size: 16px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* === TWO COLUMN === */
+        .two-col {
+            display: flex;
+            gap: 80px;
+            align-items: flex-start;
+            margin-top: 32px;
+        }
+
+        .two-col .col { flex: 1; }
+
+        /* === STEPS === */
+        .steps {
+            display: flex;
+            gap: 48px;
+            margin-top: 48px;
+        }
+
+        .step {
+            flex: 1;
+            text-align: center;
+        }
+
+        .step-number {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: var(--white);
+            font-size: 32px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+        }
+
+        .step-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 12px;
+        }
+
+        .step-desc {
+            font-size: 18px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* === CONNECTOR LINE between steps === */
+        .steps-connector {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            margin-top: 48px;
+            position: relative;
+        }
+
+        .steps-connector .step { position: relative; z-index: 1; }
+
+        .steps-connector::before {
+            content: '';
+            position: absolute;
+            top: 36px;
+            left: 15%;
+            right: 15%;
+            height: 2px;
+            background: var(--primary-border);
+        }
+
+        /* === FEATURE GRID === */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 28px;
+            margin-top: 36px;
+        }
+
+        .feature-card {
+            background: var(--white);
+            border-radius: 16px;
+            padding: 32px;
+            border: 1.5px solid rgba(0,0,0,0.06);
+        }
+
+        .feature-card .fc-icon {
+            font-size: 32px;
+            margin-bottom: 12px;
+        }
+
+        .feature-card .fc-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+
+        .feature-card .fc-desc {
+            font-size: 17px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* === MOCKUP CONTAINER === */
+        .mockup-container {
+            background: var(--white);
+            border-radius: 16px;
+            border: 1.5px solid rgba(0,0,0,0.08);
+            padding: 24px;
+            margin-top: 32px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mockup-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+
+        .mockup-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .mockup-dot.red { background: #ff5f57; }
+        .mockup-dot.yellow { background: #ffbd2e; }
+        .mockup-dot.green { background: #28c840; }
+
+        .mockup-body {
+            display: flex;
+            gap: 24px;
+        }
+
+        .mockup-stat {
+            flex: 1;
+            background: #f7f7f5;
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .mockup-stat .ms-number {
+            font-size: 36px;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .mockup-stat .ms-label {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .mockup-rows {
+            margin-top: 16px;
+        }
+
+        .mockup-row {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 12px 16px;
+            border-radius: 8px;
+            background: #f7f7f5;
+            margin-bottom: 8px;
+        }
+
+        .mockup-row .mr-pill {
+            padding: 4px 12px;
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .mr-pill.active { background: #dcfce7; color: #16a34a; }
+        .mr-pill.inactive { background: #fef2f2; color: #dc2626; }
+
+        .mockup-row .mr-name { flex: 1; font-size: 14px; color: var(--text-dark); font-weight: 500; }
+        .mockup-row .mr-date { font-size: 13px; color: var(--text-muted); }
+
+        /* === FILTER MOCKUP === */
+        .filter-mockup {
+            background: var(--white);
+            border-radius: 12px;
+            border: 1.5px solid rgba(0,0,0,0.06);
+            padding: 20px 28px;
+            display: inline-flex;
+            gap: 16px;
+            align-items: center;
+            margin-top: 28px;
+        }
+
+        .filter-chip {
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            font-family: var(--font-display);
+            border: 1.5px solid rgba(0,0,0,0.08);
+            color: var(--text-muted);
+            background: #f7f7f5;
+        }
+
+        .filter-chip.selected {
+            background: var(--primary);
+            color: var(--white);
+            border-color: var(--primary);
+        }
+
+        /* === SECURITY GRID === */
+        .security-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 28px;
+            margin-top: 40px;
+        }
+
+        .security-card {
+            text-align: center;
+            padding: 40px 24px;
+            background: var(--white);
+            border-radius: 16px;
+            border: 1.5px solid rgba(0,0,0,0.06);
+        }
+
+        .security-card .sc-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+
+        .security-card .sc-title {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+
+        .security-card .sc-desc {
+            font-size: 16px;
+            color: var(--text-muted);
+            line-height: 1.5;
+        }
+
+        /* === PRICING === */
+        .pricing-card {
+            background: var(--white);
+            border-radius: 20px;
+            border: 2px solid var(--primary);
+            padding: 48px;
+            max-width: 520px;
+            text-align: center;
+            margin-top: 40px;
+        }
+
+        .pricing-card .pc-badge {
+            background: var(--primary);
+            color: var(--white);
+            font-size: 14px;
+            font-weight: 600;
+            padding: 6px 20px;
+            border-radius: 100px;
+            display: inline-block;
+            margin-bottom: 24px;
+        }
+
+        .pricing-card .pc-price {
+            font-size: 56px;
+            font-weight: 700;
+            color: var(--text-dark);
+        }
+
+        .pricing-card .pc-price span {
+            font-size: 22px;
+            font-weight: 400;
+            color: var(--text-muted);
+        }
+
+        .pricing-card .pc-desc {
+            font-size: 18px;
+            color: var(--text-muted);
+            margin-top: 12px;
+            line-height: 1.5;
+        }
+
+        .pricing-features {
+            list-style: none;
+            margin-top: 28px;
+            text-align: left;
+        }
+
+        .pricing-features li {
+            font-size: 18px;
+            color: var(--text-dark);
+            padding: 10px 0;
+            padding-left: 32px;
+            position: relative;
+        }
+
+        .pricing-features li::before {
+            content: '✓';
+            position: absolute;
+            left: 0;
+            color: var(--green);
+            font-weight: 700;
+        }
+
+        /* === CTA SLIDE === */
+        .cta-slide .slide-content {
+            text-align: center;
+            align-items: center;
+        }
+
+        .cta-slide .slide-title { text-align: center; }
+
+        .cta-button {
+            display: inline-block;
+            background: var(--primary);
+            color: var(--white);
+            font-size: 22px;
+            font-weight: 600;
+            padding: 18px 48px;
+            border-radius: 100px;
+            margin-top: 36px;
+            font-family: var(--font-display);
+            box-shadow: 0 4px 24px rgba(21, 93, 252, 0.3);
+        }
+
+        .contact-info {
+            margin-top: 32px;
+            font-size: 20px;
+            color: var(--text-muted);
+        }
+
+        .contact-info a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        /* === Q&A SLIDE === */
+        .qa-slide .slide-content {
+            text-align: center;
+            align-items: center;
+        }
+
+        .qa-icon {
+            font-size: 120px;
+            margin-bottom: 24px;
+            opacity: 0.8;
+        }
+
+        /* === BIG QUOTE === */
+        .big-quote {
+            font-size: 40px;
+            font-weight: 600;
+            color: var(--text-dark);
+            line-height: 1.4;
+            max-width: 1100px;
+            position: relative;
+            padding-left: 48px;
+            margin-top: 24px;
+        }
+
+        .big-quote::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 5px;
+            background: var(--primary);
+            border-radius: 3px;
+        }
+
+        /* === IMPACT ROW === */
+        .impact-row {
+            display: flex;
+            gap: 40px;
+            margin-top: 48px;
+        }
+
+        .impact-item {
+            flex: 1;
+            text-align: center;
+            padding: 40px 24px;
+        }
+
+        .impact-icon {
+            font-size: 56px;
+            margin-bottom: 16px;
+        }
+
+        .impact-label {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-dark);
+            margin-bottom: 8px;
+        }
+
+        .impact-desc {
+            font-size: 17px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+
+        /* === MODAL MOCKUP === */
+        .modal-mockup {
+            background: var(--white);
+            border-radius: 16px;
+            border: 1.5px solid rgba(0,0,0,0.08);
+            padding: 32px;
+            max-width: 600px;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.08);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+        }
+
+        .modal-header h3 {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-dark);
+        }
+
+        .modal-field {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            font-size: 16px;
+        }
+
+        .modal-field .mf-label { color: var(--text-muted); font-weight: 500; }
+        .modal-field .mf-value { color: var(--text-dark); font-weight: 600; }
+
+        .modal-comment {
+            margin-top: 16px;
+            padding: 16px;
+            background: #f7f7f5;
+            border-radius: 10px;
+            border: 1px dashed var(--primary-border);
+        }
+
+        .modal-comment .mc-label {
+            font-size: 13px;
+            color: var(--primary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 6px;
+        }
+
+        .modal-comment .mc-text {
+            font-size: 15px;
+            color: var(--text-dark);
+            line-height: 1.5;
+        }
+
+        /* === SPEAKER NOTES === */
+        .speaker-notes-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(17, 17, 17, 0.95);
+            color: #e0e0e0;
+            padding: 20px 32px;
+            font-family: var(--font-display);
+            font-size: 16px;
+            line-height: 1.6;
+            z-index: 9999;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            max-height: 240px;
+            overflow-y: auto;
+        }
+
+        .speaker-notes-panel.visible { transform: translateY(0); }
+
+        .speaker-notes-panel .sn-label {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--primary);
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        /* === NAV CONTROLS === */
+        .deck-controls {
+            position: fixed;
+            left: 50%;
+            bottom: 22px;
+            transform: translateX(-50%);
+            z-index: 1000;
+            display: flex;
+            gap: 8px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .deck-controls:hover { opacity: 1; }
+
+        .deck-controls button {
+            background: rgba(17, 17, 17, 0.7);
+            color: white;
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            font-family: var(--font-display);
+        }
+
+        /* === INLINE EDITING === */
+        .edit-hotzone { position: fixed; top: 0; left: 0; width: 80px; height: 80px; z-index: 10000; cursor: pointer; }
+        .edit-toggle {
+            position: fixed; top: 16px; left: 16px;
+            background: var(--primary); color: white; border: none;
+            width: 40px; height: 40px; border-radius: 50%;
+            font-size: 18px; cursor: pointer; z-index: 10001;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+            font-family: var(--font-display);
+        }
+        .edit-toggle.show, .edit-toggle.active { opacity: 1; pointer-events: auto; }
+        [contenteditable="true"] { outline: 2px dashed var(--primary); outline-offset: 4px; cursor: text; }
+    </style>
+</head>
+<body>
+    <div class="accent-line"></div>
+    <div class="deck-viewport">
+        <main class="deck-stage" id="deckStage">
+
+            <!-- SLIDE 1: TITLE -->
+            <section class="slide title-slide active" data-notes="Buenos días a todos. Gracias por su tiempo. Soy Omar Acosta y hoy les voy a presentar GoAgent, una herramienta que diseñé específicamente para agentes de seguros como ustedes. Mi objetivo es mostrarles cómo pueden dejar de perder tiempo en tareas administrativas y enfocarse en lo que realmente importa: sus clientes.">
+                <div class="slide-content">
+                    <div class="eyebrow reveal">Plataforma de gestión de pólizas</div>
+                    <h1 class="slide-title reveal"><span class="highlight">Go</span>Agent</h1>
+                    <p class="slide-subtitle reveal">Deja de perseguir datos.<br>Empieza a gestionar clientes.</p>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">Seguros Monterrey</div>
+                    <div class="slide-number">Septiembre 2026</div>
+                </div>
+            </section>
+
+            <!-- SLIDE 2: EL PROBLEMA -->
+            <section class="slide" data-notes="Quiero empezar con una pregunta: ¿cuántos de ustedes han tenido que entrar al portal de Seguros Monterrey, buscar póliza por póliza, y copiar los datos a un Excel? Seguramente todos. Ese proceso manual es lento, tedioso, y propenso a errores. Y lo peor es que lo repiten cada semana.">
+                <div class="slide-content">
+                    <div class="eyebrow reveal">El problema</div>
+                    <h2 class="slide-title reveal">El día a día del agente</h2>
+                    <ul class="bullet-list">
+                        <li class="reveal">Entrar al portal, buscar póliza por póliza</li>
+                        <li class="reveal">Copiar datos manualmente a Excel</li>
+                        <li class="reveal">Sin alertas: se pasan fechas de cobro</li>
+                        <li class="reveal">No saben cuáles pólizas requieren cobro manual</li>
+                    </ul>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">El problema</div>
+                    <div class="slide-number">02 / 15</div>
+                </div>
+            </section>
+
+            <!-- SLIDE 3: IMPACTO REAL -->
+            <section class="slide" data-notes="Cada hora que pasan copiando datos del portal es una hora que no están vendiendo o atendiendo clientes. Y eso tiene un costo real: pierden comisiones porque se les pasó una fecha de cobro, pierden tiempo que podrían invertir en vender, y acumulan estrés innecesario. ¿Cuántas comisiones se han perdido por no tener visibilidad clara de su cartera?">
+                <div class="slide-content">
+                    <div class="eyebrow reveal">Impacto real</div>
+                    <h2 class="slide-title reveal">Lo que les <span class="highlight">cuesta</span></h2>
+                    <div class="impact-row">
+                        <div class="impact-item reveal">
+                            <div class="impact-icon">⏱️</div>
+                            <div class="impact-label">Tiempo perdido</div>
+                            <div class="impact-desc">Horas semanales en trabajo administrativo que no genera ingresos</div>
+                        </div>
+                        <div class="impact-item reveal">
+                            <div class="impact-icon">💸</div>
+                            <div class="impact-label">Comisiones perdidas</div>
+                            <div class="impact-desc">Cobros no realizados a tiempo por falta de visibilidad</div>
+                        </div>
+                        <div class="impact-item reveal">
+                            <div class="impact-icon">😰</div>
+                            <div class="impact-label">Estrés constante</div>
+                            <div class="impact-desc">Sin visibilidad clara del estado real de su cartera</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">Impacto</div>
+                    <div class="slide-number">03 / 15</div>
+                </div>
+            </section>
+
+            <!-- SLIDE 4: LA SOLUCIÓN -->
+            <section class="slide" data-notes="GoAgent resuelve todo esto. Es una extensión de Chrome que se conecta directamente al portal de Seguros Monterrey que ya usan, extrae toda la información de sus pólizas automáticamente, y la presenta en un dashboard centralizado. No necesitan cambiar su flujo de trabajo: simplemente dejan de hacer lo tedioso.">
+                <div class="slide-content">
+                    <div class="eyebrow reveal">La solución</div>
+                    <h2 class="slide-title reveal"><span class="highlight">Go</span>Agent</h2>
+                    <p class="slide-subtitle reveal" style="margin-bottom: 40px;">Automatiza lo tedioso. Enfócate en tus clientes.</p>
+                    <div class="stat-row">
+                        <div class="stat-card reveal">
+                            <div class="stat-icon">🔌</div>
+                            <div class="stat-label">Extensión de Chrome</div>
+                            <div class="stat-desc">Se conecta al portal que ya usan</div>
+                        </div>
+                        <div class="stat-card reveal">
+                            <div class="stat-icon">⚡</div>
+                            <div class="stat-label">Extracción automática</div>
+                            <div class="stat-desc">Trae sus pólizas sin esfuerzo</div>
+                        </div>
+                        <div class="stat-card reveal">
+                            <div class="stat-icon">📊</div>
+                            <div class="stat-label">Dashboard centralizado</div>
+                            <div class="stat-desc">Toda su cartera en un solo lugar</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">Solución</div>
+                    <div class="slide-number">04 / 15</div>
+                </div>
+            </section>
+
+            <!-- SLIDE 5: CÓMO FUNCIONA -->
+            <section class="slide" data-notes="El proceso es muy sencillo y solo tiene 3 pasos. Primero, instalan la extensión de Chrome — es gratis y toma menos de un minuto. Segundo, inician sesión en el portal de Seguros Monterrey como siempre — la extensión detecta que están en el portal y extrae las pólizas automáticamente. Tercero, abren el dashboard de GoAgent y toda su cartera está lista. En menos de 5 minutos tienen todo sincronizado.">
+                <div class="slide-content">
+                    <div class="eyebrow reveal">Cómo funciona</div>
+                    <h2 class="slide-title reveal">3 pasos. 5 minutos.</h2>
+                    <div class="steps-connector">
+                        <div class="step reveal">
+                            <div class="step-number">1</div>
+                            <div class="step-title">Instalar extensión</div>
+                            <div class="step-desc">Chrome Web Store<br>Menos de 1 minuto</div>
+                        </div>
+                        <div class="step reveal">
+                            <div class="step-number">2</div>
+                            <div class="step-title">Iniciar sesión</div>
+                            <div class="step-desc">En el portal de SM<br>La extensión extrae todo</div>
+                        </div>
+                        <div class="step reveal">
+                            <div class="step-number">3</div>
+                            <div class="step-title">Gestionar</div>
+                            <div class="step-desc">Dashboard listo<br>Toda su cartera al instante</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">Flujo</div>
+                    <div class="slide-number">05 / 15</div>
+                </div>
+            </section>
+
+            <!-- SLIDE 6: DASHBOARD -->
+            <section class="slide" data-notes="Este es el dashboard. De un vistazo saben exactamente el estado de su cartera: cuántas pólizas tienen en total, cuántas están activas, cuántas anuladas, y cuántas están por vencer. Pueden buscar por nombre del asegurado, número de póliza, o filtrar por diferentes criterios. Abajo ven la lista de pólizas con los datos más importantes.">
+                <div class="slide-content">
+                    <div class="eyebrow reveal">Demo</div>
+                    <h2 class="slide-title reveal">Dashboard: <span class="highlight">vista general</span></h2>
+                    <div class="mockup-container reveal">
+                        <div class="mockup-bar">
+                            <div class="mockup-dot red"></div>
+                            <div class="mockup-dot yellow"></div>
+                            <div class="mockup-dot green"></div>
+                        </div>
+                        <div class="mockup-body">
+                            <div class="mockup-stat">
+                                <div class="ms-number">156</div>
+                                <div class="ms-label">Total</div>
+                            </div>
+                            <div class="mockup-stat">
+                                <div class="ms-number" style="color: var(--green);">128</div>
+                                <div class="ms-label">Activas</div>
+                            </div>
+                            <div class="mockup-stat">
+                                <div class="ms-number" style="color: var(--red);">20</div>
+                                <div class="ms-label">Anuladas</div>
+                            </div>
+                            <div class="mockup-stat">
+                                <div class="ms-number" style="color: var(--orange);">8</div>
+                                <div class="ms-label">Por vencer</div>
+                            </div>
+                        </div>
+                        <div class="mockup-rows">
+                            <div class="mockup-row">
+                                <div class="mr-pill active">Activa</div>
+                                <div class="mr-name">Juan Pérez García</div>
+                                <div class="mr-date">Próx. pago: 15 Oct 2026</div>
+                            </div>
+                            <div class="mockup-row">
+                                <div class="mr-pill active">Activa</div>
+                                <div class="mr-name">María López Hernández</div>
+                                <div class="mr-date">Próx. pago: 22 Oct 2026</div>
+                            </div>
+                            <div class="mockup-row">
+                                <div class="mr-pill inactive">Anulada</div>
+                                <div class="mr-name">Carlos Ruiz Martínez</div>
+                                <div class="mr-date">—</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">Dashboard</div>
+                    <div class="slide-number">06 / 15</div>
+                </div>
+            </section>
+
+            <!-- SLIDE 7: FILTRO NO DOMICILIADAS -->
+            <section class="slide" data-notes="Esta es la funcionalidad que más les va a servir. GoAgent identifica automáticamente cuáles pólizas son no domiciliadas — es decir, las que no se cobran por cargo automático a tarjeta o domiciliación bancaria. Esas son las que requieren que ustedes como agentes hagan el cobro manualmente. Con un solo click filtran su cartera y ven exactamente cuáles pólizas necesitan su atención.">
+                <div class="slide-content">
+                    <div class="eyebrow reveal">Filtro clave</div>
+                    <h2 class="slide-title reveal">Pólizas <span class="highlight">no domiciliadas</span></h2>
+                    <p class="slide-subtitle reveal">Identifica automáticamente cuáles pólizas necesitan cobro manual del agente.</p>
+                    <div class="filter-mockup reveal">
+                        <div class="filter-chip">Todas</div>
+                        <div class="filter-chip selected">No domiciliadas</div>
+                        <div class="filter-chip">Domiciliadas</div>
+                    </div>
+                    <div class="two-col" style="margin-top: 40px;">
+                        <div class="col reveal">
+                            <div class="feature-card">
+                                <div class="fc-icon">🏦</div>
+                                <div class="fc-title">Domiciliadas</div>
+                                <div class="fc-desc">Cargo automático a tarjeta de crédito o débito. Se cobran solas.</div>
+                            </div>
+                        </div>
+                        <div class="col reveal">
+                            <div class="feature-card" style="border-color: var(--primary);">
+                                <div class="fc-icon">👤</div>
+                                <div class="fc-title">No domiciliadas</div>
+                                <div class="fc-desc">Pago directo o por agente. <strong>Requieren su intervención.</strong></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">No domiciliadas</div>
+                    <div class="slide-number">07 / 15</div>
+                </div>
+            </section>
+
+            <!-- SLIDE 8: FILTRO POR MES -->
+            <section class="slide" data-notes="Otra herramienta muy útil es el filtro por mes de pago. Pueden seleccionar un mes específico y ver solo las pólizas cuyo próximo pago cae en ese mes. Esto les permite planear su trabajo: al inicio de cada mes, filtran las pólizas de ese mes y saben exactamente a quién necesitan contactar. El panel 'Por vencer' les muestra cuántas pólizas están próximas a su fecha de cobro. Nunca más se les va a pasar una fecha.">
+                <div class="slide-content">
+                    <div class="eyebrow reveal">Planificación</div>
+                    <h2 class="slide-title reveal">Filtro por <span class="highlight">mes de pago</span></h2>
+                    <p class="slide-subtitle reveal">Planeen su trabajo del mes: vean exactamente cuáles pólizas tienen próximo pago.</p>
+                    <div class="stat-row" style="margin-top: 48px;">
+                        <div class="stat-card reveal">
+                            <div class="stat-icon">📅</div>
+                            <div class="stat-label">Filtro por mes</div>
+                            <div class="stat-desc">Seleccionen un mes y vean solo las pólizas con pago en ese periodo</div>
+                        </div>
+                        <div class="stat-card reveal" style="border-color: var(--orange);">
+                            <div class="stat-icon">⚠️</div>
+                            <div class="stat-label">Por vencer</div>
+                            <div class="stat-desc">Panel que muestra cuántas pólizas están próximas a su fecha de cobro</div>
+                        </div>
+                        <div class="stat-card reveal">
+                            <div class="stat-icon">✅</div>
+                            <div class="stat-label">Nunca más se pasa</div>
+                            <div class="stat-desc">Visibilidad total de fechas de cobro para toda su cartera</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">Mes de pago</div>
+                    <div class="slide-number">08 / 15</div>
+                </div>
+            </section>
+
+            <!-- SLIDE 9: DETALLE DE PÓLIZA -->
+            <section class="slide" data-notes="Cuando dan click en una póliza, se abre el detalle completo. Ahí ven toda la información del asegurado: nombre, dirección, teléfono, email, medio de cobro. Los campos de teléfono y email son editables, por si el cliente les da un número actualizado. Y lo más nuevo: el campo de comentarios, donde pueden agregar notas personalizadas para cada póliza. Por ejemplo: 'Cliente dice que pagará el viernes' o 'Llamar después de las 6pm'. Estos comentarios son suyos y nunca se sobreescriben con la sincronización.">
+                <div class="slide-content">
+                    <div class="eyebrow reveal">Detalle</div>
+                    <h2 class="slide-title reveal">Toda la info, <span class="highlight">a un click</span></h2>
+                    <div class="two-col">
+                        <div class="col reveal">
+                            <div class="modal-mockup">
+                                <div class="modal-header">
+                                    <h3>Póliza GMM-2847</h3>
+                                    <span style="color: var(--green); font-weight: 600; font-size: 14px;">● Activa</span>
+                                </div>
+                                <div class="modal-field"><span class="mf-label">Asegurado</span><span class="mf-value">Juan Pérez García</span></div>
+                                <div class="modal-field"><span class="mf-label">Teléfono</span><span class="mf-value" style="color: var(--primary);">📝 55 1234 5678</span></div>
+                                <div class="modal-field"><span class="mf-label">Email</span><span class="mf-value" style="color: var(--primary);">📝 juan@email.com</span></div>
+                                <div class="modal-field"><span class="mf-label">Medio de cobro</span><span class="mf-value">AGENTE</span></div>
+                                <div class="modal-comment">
+                                    <div class="mc-label">💬 Comentario</div>
+                                    <div class="mc-text">Cliente dice que pagará el viernes. Llamar después de las 6pm.</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col reveal">
+                            <ul class="bullet-list">
+                                <li>Información completa del asegurado</li>
+                                <li>Teléfono y email editables
+                                    <span class="sub">Actualicen datos sin depender del portal</span>
+                                </li>
+                                <li>Comentarios personalizados
+                                    <span class="sub">Notas de gestión que nunca se pierden</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">Detalle</div>
+                    <div class="slide-number">09 / 15</div>
+                </div>
+            </section>
+
+            <!-- SLIDE 10: SINCRONIZACIÓN -->
+            <section class="slide" data-notes="La extensión mantiene sus datos actualizados automáticamente. Cada vez que entran al portal de Seguros Monterrey, la extensión detecta si hay cambios en sus pólizas y actualiza solo lo que cambió. Es una sincronización inteligente: no duplica datos y no sobreescribe la información que ustedes hayan editado, como teléfonos, emails o comentarios. Sus datos siempre frescos, sin esfuerzo.">
+                <div class="slide-content">
+                    <div class="eyebrow reveal">Automatización</div>
+                    <h2 class="slide-title reveal">Sincronización <span class="highlight">inteligente</span></h2>
+                    <div class="feature-grid">
+                        <div class="feature-card reveal">
+                            <div class="fc-icon">🔄</div>
+                            <div class="fc-title">Detección automática</div>
+                            <div class="fc-desc">La extensión detecta cambios en el portal y actualiza sus datos</div>
+                        </div>
+                        <div class="feature-card reveal">
+                            <div class="fc-icon">🎯</div>
+                            <div class="fc-title">Solo lo que cambió</div>
+                            <div class="fc-desc">No duplica datos, no reprocesa lo que ya está correcto</div>
+                        </div>
+                        <div class="feature-card reveal">
+                            <div class="fc-icon">🔒</div>
+                            <div class="fc-title">Sus ediciones se respetan</div>
+                            <div class="fc-desc">Teléfonos, emails y comentarios que ustedes editaron nunca se sobreescriben</div>
+                        </div>
+                        <div class="feature-card reveal">
+                            <div class="fc-icon">☁️</div>
+                            <div class="fc-title">En la nube</div>
+                            <div class="fc-desc">Accesible desde cualquier computadora con su cuenta</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">Sincronización</div>
+                    <div class="slide-number">10 / 15</div>
+                </div>
+            </section>
+
+            <!-- SLIDE 11: SEGURIDAD -->
+            <section class="slide" data-notes="Sé que la seguridad de los datos de sus clientes es fundamental. GoAgent usa conexiones encriptadas — toda la comunicación entre la extensión y nuestros servidores viaja protegida. Cada agente solo tiene acceso a sus propias pólizas, nadie más puede ver su cartera. Y pueden iniciar sesión con su cuenta de Google o crear credenciales propias. Sus datos están protegidos.">
+                <div class="slide-content">
+                    <div class="eyebrow reveal">Confianza</div>
+                    <h2 class="slide-title reveal">Seguridad y <span class="highlight">privacidad</span></h2>
+                    <div class="security-grid">
+                        <div class="security-card reveal">
+                            <div class="sc-icon">🔐</div>
+                            <div class="sc-title">Datos encriptados</div>
+                            <div class="sc-desc">Toda la comunicación viaja protegida con HTTPS y tokens seguros</div>
+                        </div>
+                        <div class="security-card reveal">
+                            <div class="sc-icon">👁️</div>
+                            <div class="sc-title">Solo sus pólizas</div>
+                            <div class="sc-desc">Cada agente ve únicamente su propia cartera. Nadie más tiene acceso</div>
+                        </div>
+                        <div class="security-card reveal">
+                            <div class="sc-icon">🔑</div>
+                            <div class="sc-title">Autenticación segura</div>
+                            <div class="sc-desc">Inicien sesión con Google o con credenciales propias</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">Seguridad</div>
+                    <div class="slide-number">11 / 15</div>
+                </div>
+            </section>
+
+            <!-- SLIDE 12: PRICING -->
+            <section class="slide" data-notes="En cuanto al costo, GoAgent funciona con un modelo de suscripción mensual. El precio es accesible y lo pueden deducir como gasto de negocio. Ofrecemos un periodo de prueba para que lo prueben sin compromiso. Piensen en esto: si GoAgent les ayuda a cobrar aunque sea una póliza más al mes que se les hubiera pasado, ya se pagó solo.">
+                <div class="slide-content">
+                    <div class="eyebrow reveal">Inversión</div>
+                    <h2 class="slide-title reveal">Planes y <span class="highlight">precios</span></h2>
+                    <div class="two-col">
+                        <div class="col reveal">
+                            <div class="pricing-card">
+                                <div class="pc-badge">Plan Agente</div>
+                                <div class="pc-price">$199 <span>MXN / mes</span></div>
+                                <div class="pc-desc">Todo lo que necesitan para gestionar su cartera</div>
+                                <ul class="pricing-features">
+                                    <li>Sincronización ilimitada</li>
+                                    <li>Dashboard completo</li>
+                                    <li>Filtros inteligentes</li>
+                                    <li>Comentarios por póliza</li>
+                                    <li>Soporte directo</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="col reveal" style="display: flex; flex-direction: column; justify-content: center;">
+                            <div class="big-quote">Si GoAgent les ayuda a cobrar una sola póliza más al mes que se les hubiera pasado, ya se pagó solo.</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">Precios</div>
+                    <div class="slide-number">12 / 15</div>
+                </div>
+            </section>
+
+            <!-- SLIDE 13: CTA -->
+            <section class="slide cta-slide" data-notes="Entonces, el mensaje es claro: dejen de perder tiempo copiando datos y dejen de perder comisiones por fechas que se pasan. GoAgent automatiza lo tedioso para que ustedes puedan enfocarse en vender y atender a sus clientes. Los invito a probarlo. Si quieren, podemos hacer la instalación en vivo ahorita mismo, o les puedo dar acceso después de la presentación. Mi información de contacto está aquí.">
+                <div class="slide-content">
+                    <div class="eyebrow reveal">Siguiente paso</div>
+                    <h2 class="slide-title reveal">Dejen de perder<br><span class="highlight">tiempo y comisiones</span></h2>
+                    <p class="slide-subtitle reveal">GoAgent automatiza lo tedioso para que ustedes se enfoquen en sus clientes.</p>
+                    <div class="contact-info reveal">
+                        Omar Acosta &middot; <a href="#">oadrian38@gmail.com</a>
+                    </div>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">Empiece hoy</div>
+                    <div class="slide-number">13 / 15</div>
+                </div>
+            </section>
+
+
+            <!-- SLIDE 14: LINKS Y QR -->
+            <section class="slide" data-notes="Aquí tienen los códigos QR para que puedan instalar la extensión y visitar nuestra página web. El primero los lleva directamente a la Chrome Web Store donde pueden descargar GoAgent. El segundo es nuestra página oficial donde pueden encontrar más información. Pueden escanearlos con la cámara de su teléfono.">
+                <div class="slide-content" style="align-items: center; text-align: center;">
+                    <div class="eyebrow reveal">Empezar ahora</div>
+                    <h2 class="slide-title reveal" style="text-align: center;">Instala <span class="highlight">GoAgent</span></h2>
+                    <div style="display: flex; gap: 100px; margin-top: 48px; justify-content: center; align-items: flex-start;">
+                        <div class="reveal" style="text-align: center;">
+                            <div style="background: white; border-radius: 20px; padding: 28px; border: 1.5px solid rgba(0,0,0,0.06); display: inline-block;">
+                                <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0nMS4wJyBlbmNvZGluZz0nVVRGLTgnPz4KPHN2ZyB3aWR0aD0iNDFtbSIgaGVpZ2h0PSI0MW1tIiB2ZXJzaW9uPSIxLjEiIHZpZXdCb3g9IjAgMCA0MSA0MSIgZmlsbF9jb2xvcj0iIzExMTExMSIgYmFja19jb2xvcj0idHJhbnNwYXJlbnQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTIsMkgzVjNIMnpNMywySDRWM0gzek00LDJINVYzSDR6TTUsMkg2VjNINXpNNiwySDdWM0g2ek03LDJIOFYzSDd6TTgsMkg5VjNIOHpNMTAsMkgxMVYzSDEwek0xMSwySDEyVjNIMTF6TTE0LDJIMTVWM0gxNHpNMTYsMkgxN1YzSDE2ek0xNywySDE4VjNIMTd6TTE4LDJIMTlWM0gxOHpNMTksMkgyMFYzSDE5ek0yMCwySDIxVjNIMjB6TTIyLDJIMjNWM0gyMnpNMjMsMkgyNFYzSDIzek0yNSwySDI2VjNIMjV6TTI4LDJIMjlWM0gyOHpNMjksMkgzMFYzSDI5ek0zMCwySDMxVjNIMzB6TTMyLDJIMzNWM0gzMnpNMzMsMkgzNFYzSDMzek0zNCwySDM1VjNIMzR6TTM1LDJIMzZWM0gzNXpNMzYsMkgzN1YzSDM2ek0zNywySDM4VjNIMzd6TTM4LDJIMzlWM0gzOHpNMiwzSDNWNEgyek04LDNIOVY0SDh6TTEwLDNIMTFWNEgxMHpNMTEsM0gxMlY0SDExek0xMiwzSDEzVjRIMTJ6TTE0LDNIMTVWNEgxNHpNMTUsM0gxNlY0SDE1ek0xNiwzSDE3VjRIMTZ6TTIxLDNIMjJWNEgyMXpNMjIsM0gyM1Y0SDIyek0yNywzSDI4VjRIMjd6TTMwLDNIMzFWNEgzMHpNMzIsM0gzM1Y0SDMyek0zOCwzSDM5VjRIMzh6TTIsNEgzVjVIMnpNNCw0SDVWNUg0ek01LDRINlY1SDV6TTYsNEg3VjVINnpNOCw0SDlWNUg4ek0xMCw0SDExVjVIMTB6TTEyLDRIMTNWNUgxMnpNMTMsNEgxNFY1SDEzek0xOCw0SDE5VjVIMTh6TTE5LDRIMjBWNUgxOXpNMjAsNEgyMVY1SDIwek0yMSw0SDIyVjVIMjF6TTIyLDRIMjNWNUgyMnpNMjMsNEgyNFY1SDIzek0yOCw0SDI5VjVIMjh6TTMyLDRIMzNWNUgzMnpNMzQsNEgzNVY1SDM0ek0zNSw0SDM2VjVIMzV6TTM2LDRIMzdWNUgzNnpNMzgsNEgzOVY1SDM4ek0yLDVIM1Y2SDJ6TTQsNUg1VjZINHpNNSw1SDZWNkg1ek02LDVIN1Y2SDZ6TTgsNUg5VjZIOHpNMTAsNUgxMVY2SDEwek0xMSw1SDEyVjZIMTF6TTE1LDVIMTZWNkgxNXpNMTYsNUgxN1Y2SDE2ek0xNyw1SDE4VjZIMTd6TTE4LDVIMTlWNkgxOHpNMjAsNUgyMVY2SDIwek0yMSw1SDIyVjZIMjF6TTI1LDVIMjZWNkgyNXpNMjYsNUgyN1Y2SDI2ek0yNyw1SDI4VjZIMjd6TTMwLDVIMzFWNkgzMHpNMzIsNUgzM1Y2SDMyek0zNCw1SDM1VjZIMzR6TTM1LDVIMzZWNkgzNXpNMzYsNUgzN1Y2SDM2ek0zOCw1SDM5VjZIMzh6TTIsNkgzVjdIMnpNNCw2SDVWN0g0ek01LDZINlY3SDV6TTYsNkg3VjdINnpNOCw2SDlWN0g4ek0xMyw2SDE0VjdIMTN6TTE2LDZIMTdWN0gxNnpNMTcsNkgxOFY3SDE3ek0xOCw2SDE5VjdIMTh6TTIwLDZIMjFWN0gyMHpNMjMsNkgyNFY3SDIzek0yNSw2SDI2VjdIMjV6TTI4LDZIMjlWN0gyOHpNMjksNkgzMFY3SDI5ek0zMCw2SDMxVjdIMzB6TTMyLDZIMzNWN0gzMnpNMzQsNkgzNVY3SDM0ek0zNSw2SDM2VjdIMzV6TTM2LDZIMzdWN0gzNnpNMzgsNkgzOVY3SDM4ek0yLDdIM1Y4SDJ6TTgsN0g5VjhIOHpNMTAsN0gxMVY4SDEwek0xNSw3SDE2VjhIMTV6TTIxLDdIMjJWOEgyMXpNMjMsN0gyNFY4SDIzek0yNCw3SDI1VjhIMjR6TTMwLDdIMzFWOEgzMHpNMzIsN0gzM1Y4SDMyek0zOCw3SDM5VjhIMzh6TTIsOEgzVjlIMnpNMyw4SDRWOUgzek00LDhINVY5SDR6TTUsOEg2VjlINXpNNiw4SDdWOUg2ek03LDhIOFY5SDd6TTgsOEg5VjlIOHpNMTAsOEgxMVY5SDEwek0xMiw4SDEzVjlIMTJ6TTE0LDhIMTVWOUgxNHpNMTYsOEgxN1Y5SDE2ek0xOCw4SDE5VjlIMTh6TTIwLDhIMjFWOUgyMHpNMjIsOEgyM1Y5SDIyek0yNCw4SDI1VjlIMjR6TTI2LDhIMjdWOUgyNnpNMjgsOEgyOVY5SDI4ek0zMCw4SDMxVjlIMzB6TTMyLDhIMzNWOUgzMnpNMzMsOEgzNFY5SDMzek0zNCw4SDM1VjlIMzR6TTM1LDhIMzZWOUgzNXpNMzYsOEgzN1Y5SDM2ek0zNyw4SDM4VjlIMzd6TTM4LDhIMzlWOUgzOHpNMTEsOUgxMlYxMEgxMXpNMTYsOUgxN1YxMEgxNnpNMTgsOUgxOVYxMEgxOHpNMTksOUgyMFYxMEgxOXpNMjEsOUgyMlYxMEgyMXpNMjMsOUgyNFYxMEgyM3pNMjQsOUgyNVYxMEgyNHpNMjUsOUgyNlYxMEgyNXpNMjYsOUgyN1YxMEgyNnpNMjgsOUgyOVYxMEgyOHpNMzAsOUgzMVYxMEgzMHpNMiwxMEgzVjExSDJ6TTMsMTBINFYxMUgzek02LDEwSDdWMTFINnpNNywxMEg4VjExSDd6TTgsMTBIOVYxMUg4ek0xMywxMEgxNFYxMUgxM3pNMTQsMTBIMTVWMTFIMTR6TTE3LDEwSDE4VjExSDE3ek0xOSwxMEgyMFYxMUgxOXpNMjEsMTBIMjJWMTFIMjF6TTIzLDEwSDI0VjExSDIzek0yNCwxMEgyNVYxMUgyNHpNMjUsMTBIMjZWMTFIMjV6TTI2LDEwSDI3VjExSDI2ek0zMywxMEgzNFYxMUgzM3pNMzUsMTBIMzZWMTFIMzV6TTM2LDEwSDM3VjExSDM2ek0zNywxMEgzOFYxMUgzN3pNMzgsMTBIMzlWMTFIMzh6TTMsMTFINFYxMkgzek01LDExSDZWMTJINXpNMTIsMTFIMTNWMTJIMTJ6TTEzLDExSDE0VjEySDEzek0xNSwxMUgxNlYxMkgxNXpNMTYsMTFIMTdWMTJIMTZ6TTE3LDExSDE4VjEySDE3ek0xOCwxMUgxOVYxMkgxOHpNMjAsMTFIMjFWMTJIMjB6TTIyLDExSDIzVjEySDIyek0yNSwxMUgyNlYxMkgyNXpNMjYsMTFIMjdWMTJIMjZ6TTI3LDExSDI4VjEySDI3ek0yOCwxMUgyOVYxMkgyOHpNMjksMTFIMzBWMTJIMjl6TTMwLDExSDMxVjEySDMwek0zMSwxMUgzMlYxMkgzMXpNMzQsMTFIMzVWMTJIMzR6TTM2LDExSDM3VjEySDM2ek0zNywxMUgzOFYxMkgzN3pNMiwxMkgzVjEzSDJ6TTMsMTJINFYxM0gzek02LDEySDdWMTNINnpNNywxMkg4VjEzSDd6TTgsMTJIOVYxM0g4ek0xMCwxMkgxMVYxM0gxMHpNMTMsMTJIMTRWMTNIMTN6TTE0LDEySDE1VjEzSDE0ek0xNSwxMkgxNlYxM0gxNXpNMTcsMTJIMThWMTNIMTd6TTE5LDEySDIwVjEzSDE5ek0yMCwxMkgyMVYxM0gyMHpNMjQsMTJIMjVWMTNIMjR6TTI1LDEySDI2VjEzSDI1ek0yOCwxMkgyOVYxM0gyOHpNMjksMTJIMzBWMTNIMjl6TTMwLDEySDMxVjEzSDMwek0zMywxMkgzNFYxM0gzM3pNMzQsMTJIMzVWMTNIMzR6TTM1LDEySDM2VjEzSDM1ek0zNywxMkgzOFYxM0gzN3pNNiwxM0g3VjE0SDZ6TTcsMTNIOFYxNEg3ek05LDEzSDEwVjE0SDl6TTEwLDEzSDExVjE0SDEwek0xNCwxM0gxNVYxNEgxNHpNMTksMTNIMjBWMTRIMTl6TTIwLDEzSDIxVjE0SDIwek0yMSwxM0gyMlYxNEgyMXpNMjMsMTNIMjRWMTRIMjN6TTI1LDEzSDI2VjE0SDI1ek0yNiwxM0gyN1YxNEgyNnpNMzEsMTNIMzJWMTRIMzF6TTM1LDEzSDM2VjE0SDM1ek0zNiwxM0gzN1YxNEgzNnpNMzgsMTNIMzlWMTRIMzh6TTIsMTRIM1YxNUgyek01LDE0SDZWMTVINXpNOCwxNEg5VjE1SDh6TTksMTRIMTBWMTVIOXpNMTAsMTRIMTFWMTVIMTB6TTEzLDE0SDE0VjE1SDEzek0xNCwxNEgxNVYxNUgxNHpNMTksMTRIMjBWMTVIMTl6TTIwLDE0SDIxVjE1SDIwek0yMSwxNEgyMlYxNUgyMXpNMjIsMTRIMjNWMTVIMjJ6TTIzLDE0SDI0VjE1SDIzek0yNCwxNEgyNVYxNUgyNHpNMjksMTRIMzBWMTVIMjl6TTMxLDE0SDMyVjE1SDMxek0zMiwxNEgzM1YxNUgzMnpNMzYsMTRIMzdWMTVIMzZ6TTM4LDE0SDM5VjE1SDM4ek0yLDE1SDNWMTZIMnpNMywxNUg0VjE2SDN6TTUsMTVINlYxNkg1ek02LDE1SDdWMTZINnpNNywxNUg4VjE2SDd6TTEwLDE1SDExVjE2SDEwek0xMSwxNUgxMlYxNkgxMXpNMTMsMTVIMTRWMTZIMTN6TTE1LDE1SDE2VjE2SDE1ek0xNiwxNUgxN1YxNkgxNnpNMTcsMTVIMThWMTZIMTd6TTE4LDE1SDE5VjE2SDE4ek0xOSwxNUgyMFYxNkgxOXpNMjAsMTVIMjFWMTZIMjB6TTIxLDE1SDIyVjE2SDIxek0yNCwxNUgyNVYxNkgyNHpNMjUsMTVIMjZWMTZIMjV6TTI3LDE1SDI4VjE2SDI3ek0yOCwxNUgyOVYxNkgyOHpNMjksMTVIMzBWMTZIMjl6TTM0LDE1SDM1VjE2SDM0ek0zNSwxNUgzNlYxNkgzNXpNMzYsMTVIMzdWMTZIMzZ6TTM3LDE1SDM4VjE2SDM3ek0yLDE2SDNWMTdIMnpNMywxNkg0VjE3SDN6TTUsMTZINlYxN0g1ek02LDE2SDdWMTdINnpNNywxNkg4VjE3SDd6TTgsMTZIOVYxN0g4ek05LDE2SDEwVjE3SDl6TTEwLDE2SDExVjE3SDEwek0xMSwxNkgxMlYxN0gxMXpNMTIsMTZIMTNWMTdIMTJ6TTEzLDE2SDE0VjE3SDEzek0xNSwxNkgxNlYxN0gxNXpNMTYsMTZIMTdWMTdIMTZ6TTE3LDE2SDE4VjE3SDE3ek0yMCwxNkgyMVYxN0gyMHpNMjIsMTZIMjNWMTdIMjJ6TTI0LDE2SDI1VjE3SDI0ek0yNSwxNkgyNlYxN0gyNXpNMjgsMTZIMjlWMTdIMjh6TTI5LDE2SDMwVjE3SDI5ek0zMiwxNkgzM1YxN0gzMnpNMzQsMTZIMzVWMTdIMzR6TTQsMTdINVYxOEg0ek01LDE3SDZWMThINXpNOSwxN0gxMFYxOEg5ek0xMCwxN0gxMVYxOEgxMHpNMTIsMTdIMTNWMThIMTJ6TTE2LDE3SDE3VjE4SDE2ek0xOCwxN0gxOVYxOEgxOHpNMTksMTdIMjBWMThIMTl6TTIwLDE3SDIxVjE4SDIwek0yMiwxN0gyM1YxOEgyMnpNMjMsMTdIMjRWMThIMjN6TTI0LDE3SDI1VjE4SDI0ek0yNiwxN0gyN1YxOEgyNnpNMjgsMTdIMjlWMThIMjh6TTI5LDE3SDMwVjE4SDI5ek0zMiwxN0gzM1YxOEgzMnpNMzUsMTdIMzZWMThIMzV6TTM2LDE3SDM3VjE4SDM2ek0zNywxN0gzOFYxOEgzN3pNMiwxOEgzVjE5SDJ6TTQsMThINVYxOUg0ek02LDE4SDdWMTlINnpNNywxOEg4VjE5SDd6TTgsMThIOVYxOUg4ek05LDE4SDEwVjE5SDl6TTEwLDE4SDExVjE5SDEwek0xMSwxOEgxMlYxOUgxMXpNMTQsMThIMTVWMTlIMTR6TTE3LDE4SDE4VjE5SDE3ek0xOSwxOEgyMFYxOUgxOXpNMjEsMThIMjJWMTlIMjF6TTIyLDE4SDIzVjE5SDIyek0yMywxOEgyNFYxOUgyM3pNMjQsMThIMjVWMTlIMjR6TTI1LDE4SDI2VjE5SDI1ek0yNiwxOEgyN1YxOUgyNnpNMzEsMThIMzJWMTlIMzF6TTMyLDE4SDMzVjE5SDMyek0zMywxOEgzNFYxOUgzM3pNMzYsMThIMzdWMTlIMzZ6TTM4LDE4SDM5VjE5SDM4ek0yLDE5SDNWMjBIMnpNMywxOUg0VjIwSDN6TTUsMTlINlYyMEg1ek03LDE5SDhWMjBIN3pNMTIsMTlIMTNWMjBIMTJ6TTEzLDE5SDE0VjIwSDEzek0xNSwxOUgxNlYyMEgxNXpNMTYsMTlIMTdWMjBIMTZ6TTE3LDE5SDE4VjIwSDE3ek0xOCwxOUgxOVYyMEgxOHpNMjAsMTlIMjFWMjBIMjB6TTIyLDE5SDIzVjIwSDIyek0yMywxOUgyNFYyMEgyM3pNMjUsMTlIMjZWMjBIMjV6TTI3LDE5SDI4VjIwSDI3ek0yOSwxOUgzMFYyMEgyOXpNMzAsMTlIMzFWMjBIMzB6TTMxLDE5SDMyVjIwSDMxek0zNCwxOUgzNVYyMEgzNHpNMzUsMTlIMzZWMjBIMzV6TTM2LDE5SDM3VjIwSDM2ek0zNywxOUgzOFYyMEgzN3pNNCwyMEg1VjIxSDR6TTcsMjBIOFYyMUg3ek04LDIwSDlWMjFIOHpNMTAsMjBIMTFWMjFIMTB6TTEzLDIwSDE0VjIxSDEzek0xNywyMEgxOFYyMUgxN3pNMTksMjBIMjBWMjFIMTl6TTIyLDIwSDIzVjIxSDIyek0yNSwyMEgyNlYyMUgyNXpNMjYsMjBIMjdWMjFIMjZ6TTI4LDIwSDI5VjIxSDI4ek0yOSwyMEgzMFYyMUgyOXpNMzAsMjBIMzFWMjFIMzB6TTMxLDIwSDMyVjIxSDMxek0zMywyMEgzNFYyMUgzM3pNNCwyMUg1VjIySDR6TTcsMjFIOFYyMkg3ek05LDIxSDEwVjIySDl6TTExLDIxSDEyVjIySDExek0xMiwyMUgxM1YyMkgxMnpNMTYsMjFIMTdWMjJIMTZ6TTE5LDIxSDIwVjIySDE5ek0yMCwyMUgyMVYyMkgyMHpNMjEsMjFIMjJWMjJIMjF6TTIzLDIxSDI0VjIySDIzek0yNSwyMUgyNlYyMkgyNXpNMjYsMjFIMjdWMjJIMjZ6TTI5LDIxSDMwVjIySDI5ek0zMSwyMUgzMlYyMkgzMXpNMzIsMjFIMzNWMjJIMzJ6TTMzLDIxSDM0VjIySDMzek0zNiwyMUgzN1YyMkgzNnpNMzcsMjFIMzhWMjJIMzd6TTUsMjJINlYyM0g1ek04LDIySDlWMjNIOHpNMTAsMjJIMTFWMjNIMTB6TTExLDIySDEyVjIzSDExek0xMiwyMkgxM1YyM0gxMnpNMTMsMjJIMTRWMjNIMTN6TTE0LDIySDE1VjIzSDE0ek0xOSwyMkgyMFYyM0gxOXpNMjEsMjJIMjJWMjNIMjF6TTIzLDIySDI0VjIzSDIzek0yNCwyMkgyNVYyM0gyNHpNMjYsMjJIMjdWMjNIMjZ6TTI5LDIySDMwVjIzSDI5ek0zMSwyMkgzMlYyM0gzMXpNMzIsMjJIMzNWMjNIMzJ6TTMzLDIySDM0VjIzSDMzek0zNiwyMkgzN1YyM0gzNnpNMzcsMjJIMzhWMjNIMzd6TTM4LDIySDM5VjIzSDM4ek01LDIzSDZWMjRINXpNNiwyM0g3VjI0SDZ6TTksMjNIMTBWMjRIOXpNMTMsMjNIMTRWMjRIMTN6TTE2LDIzSDE3VjI0SDE2ek0xNywyM0gxOFYyNEgxN3pNMTgsMjNIMTlWMjRIMTh6TTIwLDIzSDIxVjI0SDIwek0yMiwyM0gyM1YyNEgyMnpNMjMsMjNIMjRWMjRIMjN6TTI1LDIzSDI2VjI0SDI1ek0yNywyM0gyOFYyNEgyN3pNMjgsMjNIMjlWMjRIMjh6TTI5LDIzSDMwVjI0SDI5ek0zMCwyM0gzMVYyNEgzMHpNMzQsMjNIMzVWMjRIMzR6TTM3LDIzSDM4VjI0SDM3ek0yLDI0SDNWMjVIMnpNMywyNEg0VjI1SDN6TTQsMjRINVYyNUg0ek01LDI0SDZWMjVINXpNNiwyNEg3VjI1SDZ6TTcsMjRIOFYyNUg3ek04LDI0SDlWMjVIOHpNOSwyNEgxMFYyNUg5ek0xMCwyNEgxMVYyNUgxMHpNMTEsMjRIMTJWMjVIMTF6TTEyLDI0SDEzVjI1SDEyek0xMywyNEgxNFYyNUgxM3pNMTQsMjRIMTVWMjVIMTR6TTE3LDI0SDE4VjI1SDE3ek0yMiwyNEgyM1YyNUgyMnpNMjUsMjRIMjZWMjVIMjV6TTI2LDI0SDI3VjI1SDI2ek0yOSwyNEgzMFYyNUgyOXpNMzMsMjRIMzRWMjVIMzN6TTM0LDI0SDM1VjI1SDM0ek02LDI1SDdWMjZINnpNNywyNUg4VjI2SDd6TTksMjVIMTBWMjZIOXpNMTEsMjVIMTJWMjZIMTF6TTEyLDI1SDEzVjI2SDEyek0xNCwyNUgxNVYyNkgxNHpNMTYsMjVIMTdWMjZIMTZ6TTE3LDI1SDE4VjI2SDE3ek0xOCwyNUgxOVYyNkgxOHpNMTksMjVIMjBWMjZIMTl6TTIwLDI1SDIxVjI2SDIwek0yMSwyNUgyMlYyNkgyMXpNMjMsMjVIMjRWMjZIMjN6TTI0LDI1SDI1VjI2SDI0ek0yNiwyNUgyN1YyNkgyNnpNMjgsMjVIMjlWMjZIMjh6TTMzLDI1SDM0VjI2SDMzek0zNiwyNUgzN1YyNkgzNnpNMzcsMjVIMzhWMjZIMzd6TTIsMjZIM1YyN0gyek03LDI2SDhWMjdIN3pNOCwyNkg5VjI3SDh6TTksMjZIMTBWMjdIOXpNMTAsMjZIMTFWMjdIMTB6TTEzLDI2SDE0VjI3SDEzek0xNCwyNkgxNVYyN0gxNHpNMTcsMjZIMThWMjdIMTd6TTE5LDI2SDIwVjI3SDE5ek0yMSwyNkgyMlYyN0gyMXpNMjIsMjZIMjNWMjdIMjJ6TTIzLDI2SDI0VjI3SDIzek0yNCwyNkgyNVYyN0gyNHpNMjYsMjZIMjdWMjdIMjZ6TTMyLDI2SDMzVjI3SDMyek0zNiwyNkgzN1YyN0gzNnpNMzcsMjZIMzhWMjdIMzd6TTM4LDI2SDM5VjI3SDM4ek0yLDI3SDNWMjhIMnpNNSwyN0g2VjI4SDV6TTYsMjdIN1YyOEg2ek0xMCwyN0gxMVYyOEgxMHpNMTMsMjdIMTRWMjhIMTN6TTE1LDI3SDE2VjI4SDE1ek0xNiwyN0gxN1YyOEgxNnpNMTcsMjdIMThWMjhIMTd6TTE4LDI3SDE5VjI4SDE4ek0xOSwyN0gyMFYyOEgxOXpNMjAsMjdIMjFWMjhIMjB6TTIxLDI3SDIyVjI4SDIxek0yMywyN0gyNFYyOEgyM3pNMjUsMjdIMjZWMjhIMjV6TTI4LDI3SDI5VjI4SDI4ek0yOSwyN0gzMFYyOEgyOXpNMzAsMjdIMzFWMjhIMzB6TTM0LDI3SDM1VjI4SDM0ek0zNiwyN0gzN1YyOEgzNnpNMzcsMjdIMzhWMjhIMzd6TTUsMjhINlYyOUg1ek04LDI4SDlWMjlIOHpNOSwyOEgxMFYyOUg5ek0xMCwyOEgxMVYyOUgxMHpNMTMsMjhIMTRWMjlIMTN6TTE2LDI4SDE3VjI5SDE2ek0xNywyOEgxOFYyOUgxN3pNMTgsMjhIMTlWMjlIMTh6TTE5LDI4SDIwVjI5SDE5ek0yMiwyOEgyM1YyOUgyMnpNMjMsMjhIMjRWMjlIMjN6TTI0LDI4SDI1VjI5SDI0ek0yNSwyOEgyNlYyOUgyNXpNMjYsMjhIMjdWMjlIMjZ6TTI5LDI4SDMwVjI5SDI5ek0zMiwyOEgzM1YyOUgzMnpNMzMsMjhIMzRWMjlIMzN6TTM1LDI4SDM2VjI5SDM1ek0zNiwyOEgzN1YyOUgzNnpNNCwyOUg1VjMwSDR6TTksMjlIMTBWMzBIOXpNMTAsMjlIMTFWMzBIMTB6TTEyLDI5SDEzVjMwSDEyek0xMywyOUgxNFYzMEgxM3pNMTcsMjlIMThWMzBIMTd6TTE5LDI5SDIwVjMwSDE5ek0yMCwyOUgyMVYzMEgyMHpNMjIsMjlIMjNWMzBIMjJ6TTIzLDI5SDI0VjMwSDIzek0yNSwyOUgyNlYzMEgyNXpNMjgsMjlIMjlWMzBIMjh6TTMxLDI5SDMyVjMwSDMxek0zMiwyOUgzM1YzMEgzMnpNMzMsMjlIMzRWMzBIMzN6TTM2LDI5SDM3VjMwSDM2ek0zNywyOUgzOFYzMEgzN3pNMiwzMEgzVjMxSDJ6TTMsMzBINFYzMUgzek00LDMwSDVWMzFINHpNNSwzMEg2VjMxSDV6TTcsMzBIOFYzMUg3ek04LDMwSDlWMzFIOHpNMTEsMzBIMTJWMzFIMTF6TTEyLDMwSDEzVjMxSDEyek0xMywzMEgxNFYzMUgxM3pNMTQsMzBIMTVWMzFIMTR6TTE3LDMwSDE4VjMxSDE3ek0xOSwzMEgyMFYzMUgxOXpNMjEsMzBIMjJWMzFIMjF6TTIyLDMwSDIzVjMxSDIyek0yMywzMEgyNFYzMUgyM3pNMjQsMzBIMjVWMzFIMjR6TTI2LDMwSDI3VjMxSDI2ek0yOSwzMEgzMFYzMUgyOXpNMzAsMzBIMzFWMzFIMzB6TTMxLDMwSDMyVjMxSDMxek0zMiwzMEgzM1YzMUgzMnpNMzMsMzBIMzRWMzFIMzN6TTM0LDMwSDM1VjMxSDM0ek0zNSwzMEgzNlYzMUgzNXpNMzYsMzBIMzdWMzFIMzZ6TTEwLDMxSDExVjMySDEwek0xMSwzMUgxMlYzMkgxMXpNMTMsMzFIMTRWMzJIMTN6TTE2LDMxSDE3VjMySDE2ek0xNywzMUgxOFYzMkgxN3pNMTgsMzFIMTlWMzJIMTh6TTE5LDMxSDIwVjMySDE5ek0yMCwzMUgyMVYzMkgyMHpNMjIsMzFIMjNWMzJIMjJ6TTIzLDMxSDI0VjMySDIzek0yNCwzMUgyNVYzMkgyNHpNMjUsMzFIMjZWMzJIMjV6TTI4LDMxSDI5VjMySDI4ek0zMCwzMUgzMVYzMkgzMHpNMzQsMzFIMzVWMzJIMzR6TTIsMzJIM1YzM0gyek0zLDMySDRWMzNIM3pNNCwzMkg1VjMzSDR6TTUsMzJINlYzM0g1ek02LDMySDdWMzNINnpNNywzMkg4VjMzSDd6TTgsMzJIOVYzM0g4ek0xMSwzMkgxMlYzM0gxMXpNMTIsMzJIMTNWMzNIMTJ6TTEzLDMySDE0VjMzSDEzek0xNCwzMkgxNVYzM0gxNHpNMTUsMzJIMTZWMzNIMTV6TTE3LDMySDE4VjMzSDE3ek0xOSwzMkgyMFYzM0gxOXpNMjIsMzJIMjNWMzNIMjJ6TTI0LDMySDI1VjMzSDI0ek0yNSwzMkgyNlYzM0gyNXpNMjYsMzJIMjdWMzNIMjZ6TTI4LDMySDI5VjMzSDI4ek0zMCwzMkgzMVYzM0gzMHpNMzIsMzJIMzNWMzNIMzJ6TTM0LDMySDM1VjMzSDM0ek0zNSwzMkgzNlYzM0gzNXpNMiwzM0gzVjM0SDJ6TTgsMzNIOVYzNEg4ek0xMCwzM0gxMVYzNEgxMHpNMTYsMzNIMTdWMzRIMTZ6TTE4LDMzSDE5VjM0SDE4ek0xOSwzM0gyMFYzNEgxOXpNMjMsMzNIMjRWMzRIMjN6TTI0LDMzSDI1VjM0SDI0ek0yNiwzM0gyN1YzNEgyNnpNMzAsMzNIMzFWMzRIMzB6TTM0LDMzSDM1VjM0SDM0ek0zNiwzM0gzN1YzNEgzNnpNMzcsMzNIMzhWMzRIMzd6TTIsMzRIM1YzNUgyek00LDM0SDVWMzVINHpNNSwzNEg2VjM1SDV6TTYsMzRIN1YzNUg2ek04LDM0SDlWMzVIOHpNMTAsMzRIMTFWMzVIMTB6TTExLDM0SDEyVjM1SDExek0xMiwzNEgxM1YzNUgxMnpNMTMsMzRIMTRWMzVIMTN6TTE0LDM0SDE1VjM1SDE0ek0xNywzNEgxOFYzNUgxN3pNMTksMzRIMjBWMzVIMTl6TTIyLDM0SDIzVjM1SDIyek0yMywzNEgyNFYzNUgyM3pNMjQsMzRIMjVWMzVIMjR6TTI1LDM0SDI2VjM1SDI1ek0yNiwzNEgyN1YzNUgyNnpNMjgsMzRIMjlWMzVIMjh6TTMwLDM0SDMxVjM1SDMwek0zMSwzNEgzMlYzNUgzMXpNMzIsMzRIMzNWMzVIMzJ6TTMzLDM0SDM0VjM1SDMzek0zNCwzNEgzNVYzNUgzNHpNMzYsMzRIMzdWMzVIMzZ6TTIsMzVIM1YzNkgyek00LDM1SDVWMzZINHpNNSwzNUg2VjM2SDV6TTYsMzVIN1YzNkg2ek04LDM1SDlWMzZIOHpNMTIsMzVIMTNWMzZIMTJ6TTEzLDM1SDE0VjM2SDEzek0xNSwzNUgxNlYzNkgxNXpNMTYsMzVIMTdWMzZIMTZ6TTE3LDM1SDE4VjM2SDE3ek0xOCwzNUgxOVYzNkgxOHpNMjAsMzVIMjFWMzZIMjB6TTI1LDM1SDI2VjM2SDI1ek0yOCwzNUgyOVYzNkgyOHpNMjksMzVIMzBWMzZIMjl6TTMwLDM1SDMxVjM2SDMwek0zMSwzNUgzMlYzNkgzMXpNMzIsMzVIMzNWMzZIMzJ6TTMzLDM1SDM0VjM2SDMzek0zNSwzNUgzNlYzNkgzNXpNMzYsMzVIMzdWMzZIMzZ6TTIsMzZIM1YzN0gyek00LDM2SDVWMzdINHpNNSwzNkg2VjM3SDV6TTYsMzZIN1YzN0g2ek04LDM2SDlWMzdIOHpNMTIsMzZIMTNWMzdIMTJ6TTEzLDM2SDE0VjM3SDEzek0xNCwzNkgxNVYzN0gxNHpNMTcsMzZIMThWMzdIMTd6TTE4LDM2SDE5VjM3SDE4ek0xOSwzNkgyMFYzN0gxOXpNMjIsMzZIMjNWMzdIMjJ6TTIzLDM2SDI0VjM3SDIzek0yNCwzNkgyNVYzN0gyNHpNMjUsMzZIMjZWMzdIMjV6TTI2LDM2SDI3VjM3SDI2ek0yNywzNkgyOFYzN0gyN3pNMjgsMzZIMjlWMzdIMjh6TTMxLDM2SDMyVjM3SDMxek0zMiwzNkgzM1YzN0gzMnpNMzMsMzZIMzRWMzdIMzN6TTIsMzdIM1YzOEgyek04LDM3SDlWMzhIOHpNMTAsMzdIMTFWMzhIMTB6TTE2LDM3SDE3VjM4SDE2ek0xOSwzN0gyMFYzOEgxOXpNMjAsMzdIMjFWMzhIMjB6TTIxLDM3SDIyVjM4SDIxek0yMywzN0gyNFYzOEgyM3pNMjYsMzdIMjdWMzhIMjZ6TTI4LDM3SDI5VjM4SDI4ek0yOSwzN0gzMFYzOEgyOXpNMzMsMzdIMzRWMzhIMzN6TTM2LDM3SDM3VjM4SDM2ek0zNywzN0gzOFYzOEgzN3pNMiwzOEgzVjM5SDJ6TTMsMzhINFYzOUgzek00LDM4SDVWMzlINHpNNSwzOEg2VjM5SDV6TTYsMzhIN1YzOUg2ek03LDM4SDhWMzlIN3pNOCwzOEg5VjM5SDh6TTEwLDM4SDExVjM5SDEwek0xNCwzOEgxNVYzOUgxNHpNMTksMzhIMjBWMzlIMTl6TTIxLDM4SDIyVjM5SDIxek0yMiwzOEgyM1YzOUgyMnpNMjMsMzhIMjRWMzlIMjN6TTI0LDM4SDI1VjM5SDI0ek0yNiwzOEgyN1YzOUgyNnpNMjksMzhIMzBWMzlIMjl6TTMxLDM4SDMyVjM5SDMxek0zNiwzOEgzN1YzOUgzNnpNMzcsMzhIMzhWMzlIMzd6TTM4LDM4SDM5VjM5SDM4eiIgaWQ9InFyLXBhdGgiIGZpbGw9IiMwMDAwMDAiIGZpbGwtb3BhY2l0eT0iMSIgZmlsbC1ydWxlPSJub256ZXJvIiBzdHJva2U9Im5vbmUiIC8+PC9zdmc+" alt="QR Extension" style="width: 260px; height: 260px;">
+                            </div>
+                            <div style="margin-top: 20px; font-size: 22px; font-weight: 700; color: #111;">Extensión de Chrome</div>
+                            <div style="margin-top: 8px; font-size: 15px; color: #6B6B6B; max-width: 300px; word-break: break-all;">chromewebstore.google.com</div>
+                        </div>
+                        <div class="reveal" style="text-align: center;">
+                            <div style="background: white; border-radius: 20px; padding: 28px; border: 1.5px solid rgba(0,0,0,0.06); display: inline-block;">
+                                <img src="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0nMS4wJyBlbmNvZGluZz0nVVRGLTgnPz4KPHN2ZyB3aWR0aD0iMjltbSIgaGVpZ2h0PSIyOW1tIiB2ZXJzaW9uPSIxLjEiIHZpZXdCb3g9IjAgMCAyOSAyOSIgZmlsbF9jb2xvcj0iIzExMTExMSIgYmFja19jb2xvcj0idHJhbnNwYXJlbnQiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PHBhdGggZD0iTTIsMkgzVjNIMnpNMywySDRWM0gzek00LDJINVYzSDR6TTUsMkg2VjNINXpNNiwySDdWM0g2ek03LDJIOFYzSDd6TTgsMkg5VjNIOHpNMTAsMkgxMVYzSDEwek0xMywySDE0VjNIMTN6TTE0LDJIMTVWM0gxNHpNMTYsMkgxN1YzSDE2ek0yMCwySDIxVjNIMjB6TTIxLDJIMjJWM0gyMXpNMjIsMkgyM1YzSDIyek0yMywySDI0VjNIMjN6TTI0LDJIMjVWM0gyNHpNMjUsMkgyNlYzSDI1ek0yNiwySDI3VjNIMjZ6TTIsM0gzVjRIMnpNOCwzSDlWNEg4ek0xMSwzSDEyVjRIMTF6TTEyLDNIMTNWNEgxMnpNMTgsM0gxOVY0SDE4ek0yMCwzSDIxVjRIMjB6TTI2LDNIMjdWNEgyNnpNMiw0SDNWNUgyek00LDRINVY1SDR6TTUsNEg2VjVINXpNNiw0SDdWNUg2ek04LDRIOVY1SDh6TTEyLDRIMTNWNUgxMnpNMTQsNEgxNVY1SDE0ek0xNSw0SDE2VjVIMTV6TTE3LDRIMThWNUgxN3pNMjAsNEgyMVY1SDIwek0yMiw0SDIzVjVIMjJ6TTIzLDRIMjRWNUgyM3pNMjQsNEgyNVY1SDI0ek0yNiw0SDI3VjVIMjZ6TTIsNUgzVjZIMnpNNCw1SDVWNkg0ek01LDVINlY2SDV6TTYsNUg3VjZINnpNOCw1SDlWNkg4ek0xNCw1SDE1VjZIMTR6TTE1LDVIMTZWNkgxNXpNMTgsNUgxOVY2SDE4ek0yMCw1SDIxVjZIMjB6TTIyLDVIMjNWNkgyMnpNMjMsNUgyNFY2SDIzek0yNCw1SDI1VjZIMjR6TTI2LDVIMjdWNkgyNnpNMiw2SDNWN0gyek00LDZINVY3SDR6TTUsNkg2VjdINXpNNiw2SDdWN0g2ek04LDZIOVY3SDh6TTExLDZIMTJWN0gxMXpNMTMsNkgxNFY3SDEzek0xOCw2SDE5VjdIMTh6TTIwLDZIMjFWN0gyMHpNMjIsNkgyM1Y3SDIyek0yMyw2SDI0VjdIMjN6TTI0LDZIMjVWN0gyNHpNMjYsNkgyN1Y3SDI2ek0yLDdIM1Y4SDJ6TTgsN0g5VjhIOHpNMTIsN0gxM1Y4SDEyek0xNCw3SDE1VjhIMTR6TTE2LDdIMTdWOEgxNnpNMjAsN0gyMVY4SDIwek0yNiw3SDI3VjhIMjZ6TTIsOEgzVjlIMnpNMyw4SDRWOUgzek00LDhINVY5SDR6TTUsOEg2VjlINXpNNiw4SDdWOUg2ek03LDhIOFY5SDd6TTgsOEg5VjlIOHpNMTAsOEgxMVY5SDEwek0xMiw4SDEzVjlIMTJ6TTE0LDhIMTVWOUgxNHpNMTYsOEgxN1Y5SDE2ek0xOCw4SDE5VjlIMTh6TTIwLDhIMjFWOUgyMHpNMjEsOEgyMlY5SDIxek0yMiw4SDIzVjlIMjJ6TTIzLDhIMjRWOUgyM3pNMjQsOEgyNVY5SDI0ek0yNSw4SDI2VjlIMjV6TTI2LDhIMjdWOUgyNnpNMTAsOUgxMVYxMEgxMHpNMTIsOUgxM1YxMEgxMnpNMTMsOUgxNFYxMEgxM3pNMTUsOUgxNlYxMEgxNXpNMTYsOUgxN1YxMEgxNnpNMTcsOUgxOFYxMEgxN3pNMTgsOUgxOVYxMEgxOHpNMiwxMEgzVjExSDJ6TTMsMTBINFYxMUgzek01LDEwSDZWMTFINXpNNiwxMEg3VjExSDZ6TTgsMTBIOVYxMUg4ek0xMSwxMEgxMlYxMUgxMXpNMTIsMTBIMTNWMTFIMTJ6TTEzLDEwSDE0VjExSDEzek0xNCwxMEgxNVYxMUgxNHpNMTcsMTBIMThWMTFIMTd6TTE4LDEwSDE5VjExSDE4ek0yMCwxMEgyMVYxMUgyMHpNMjYsMTBIMjdWMTFIMjZ6TTQsMTFINVYxMkg0ek01LDExSDZWMTJINXpNNywxMUg4VjEySDd6TTExLDExSDEyVjEySDExek0xNCwxMUgxNVYxMkgxNHpNMTUsMTFIMTZWMTJIMTV6TTE2LDExSDE3VjEySDE2ek0xNywxMUgxOFYxMkgxN3pNMTksMTFIMjBWMTJIMTl6TTIxLDExSDIyVjEySDIxek0yMiwxMUgyM1YxMkgyMnpNMjMsMTFIMjRWMTJIMjN6TTI0LDExSDI1VjEySDI0ek0yNSwxMUgyNlYxMkgyNXpNNSwxMkg2VjEzSDV6TTgsMTJIOVYxM0g4ek05LDEySDEwVjEzSDl6TTEyLDEySDEzVjEzSDEyek0xMywxMkgxNFYxM0gxM3pNMTUsMTJIMTZWMTNIMTV6TTE3LDEySDE4VjEzSDE3ek0xOCwxMkgxOVYxM0gxOHpNMjAsMTJIMjFWMTNIMjB6TTIxLDEySDIyVjEzSDIxek0yMywxMkgyNFYxM0gyM3pNMjYsMTJIMjdWMTNIMjZ6TTIsMTNIM1YxNEgyek00LDEzSDVWMTRINHpNNiwxM0g3VjE0SDZ6TTExLDEzSDEyVjE0SDExek0xMiwxM0gxM1YxNEgxMnpNMTgsMTNIMTlWMTRIMTh6TTIxLDEzSDIyVjE0SDIxek0yMywxM0gyNFYxNEgyM3pNMjQsMTNIMjVWMTRIMjR6TTI1LDEzSDI2VjE0SDI1ek0yNiwxM0gyN1YxNEgyNnpNMywxNEg0VjE1SDN6TTQsMTRINVYxNUg0ek01LDE0SDZWMTVINXpNNiwxNEg3VjE1SDZ6TTgsMTRIOVYxNUg4ek0xMSwxNEgxMlYxNUgxMXpNMTQsMTRIMTVWMTVIMTR6TTE3LDE0SDE4VjE1SDE3ek0xOCwxNEgxOVYxNUgxOHpNMjAsMTRIMjFWMTVIMjB6TTI2LDE0SDI3VjE1SDI2ek0yLDE1SDNWMTZIMnpNMywxNUg0VjE2SDN6TTQsMTVINVYxNkg0ek0xMCwxNUgxMVYxNkgxMHpNMTEsMTVIMTJWMTZIMTF6TTEzLDE1SDE0VjE2SDEzek0xNCwxNUgxNVYxNkgxNHpNMTUsMTVIMTZWMTZIMTV6TTE2LDE1SDE3VjE2SDE2ek0xNywxNUgxOFYxNkgxN3pNMTgsMTVIMTlWMTZIMTh6TTE5LDE1SDIwVjE2SDE5ek0yMiwxNUgyM1YxNkgyMnpNMjUsMTVIMjZWMTZIMjV6TTIsMTZIM1YxN0gyek0zLDE2SDRWMTdIM3pNNiwxNkg3VjE3SDZ6TTgsMTZIOVYxN0g4ek0xMCwxNkgxMVYxN0gxMHpNMTEsMTZIMTJWMTdIMTF6TTEyLDE2SDEzVjE3SDEyek0xNCwxNkgxNVYxN0gxNHpNMTcsMTZIMThWMTdIMTd6TTE5LDE2SDIwVjE3SDE5ek0yMCwxNkgyMVYxN0gyMHpNMjIsMTZIMjNWMTdIMjJ6TTIzLDE2SDI0VjE3SDIzek0yNCwxNkgyNVYxN0gyNHpNMjUsMTZIMjZWMTdIMjV6TTI2LDE2SDI3VjE3SDI2ek0yLDE3SDNWMThIMnpNNCwxN0g1VjE4SDR6TTUsMTdINlYxOEg1ek02LDE3SDdWMThINnpNOSwxN0gxMFYxOEg5ek0xNCwxN0gxNVYxOEgxNHpNMTcsMTdIMThWMThIMTd6TTE5LDE3SDIwVjE4SDE5ek0yMSwxN0gyMlYxOEgyMXpNMjMsMTdIMjRWMThIMjN6TTI0LDE3SDI1VjE4SDI0ek0yNiwxN0gyN1YxOEgyNnpNMiwxOEgzVjE5SDJ6TTYsMThIN1YxOUg2ek04LDE4SDlWMTlIOHpNOSwxOEgxMFYxOUg5ek0xMSwxOEgxMlYxOUgxMXpNMTUsMThIMTZWMTlIMTV6TTE4LDE4SDE5VjE5SDE4ek0xOSwxOEgyMFYxOUgxOXpNMjAsMThIMjFWMTlIMjB6TTIxLDE4SDIyVjE5SDIxek0yMiwxOEgyM1YxOUgyMnpNMjQsMThIMjVWMTlIMjR6TTI1LDE4SDI2VjE5SDI1ek0xMCwxOUgxMVYyMEgxMHpNMTIsMTlIMTNWMjBIMTJ6TTE1LDE5SDE2VjIwSDE1ek0xOCwxOUgxOVYyMEgxOHpNMjIsMTlIMjNWMjBIMjJ6TTI0LDE5SDI1VjIwSDI0ek0yNSwxOUgyNlYyMEgyNXpNMiwyMEgzVjIxSDJ6TTMsMjBINFYyMUgzek00LDIwSDVWMjFINHpNNSwyMEg2VjIxSDV6TTYsMjBIN1YyMUg2ek03LDIwSDhWMjFIN3pNOCwyMEg5VjIxSDh6TTExLDIwSDEyVjIxSDExek0xMiwyMEgxM1YyMUgxMnpNMTMsMjBIMTRWMjFIMTN6TTE4LDIwSDE5VjIxSDE4ek0yMCwyMEgyMVYyMUgyMHpNMjIsMjBIMjNWMjFIMjJ6TTI2LDIwSDI3VjIxSDI2ek0yLDIxSDNWMjJIMnpNOCwyMUg5VjIySDh6TTExLDIxSDEyVjIySDExek0xMiwyMUgxM1YyMkgxMnpNMTUsMjFIMTZWMjJIMTV6TTE3LDIxSDE4VjIySDE3ek0xOCwyMUgxOVYyMkgxOHpNMjIsMjFIMjNWMjJIMjJ6TTI1LDIxSDI2VjIySDI1ek0yLDIySDNWMjNIMnpNNCwyMkg1VjIzSDR6TTUsMjJINlYyM0g1ek02LDIySDdWMjNINnpNOCwyMkg5VjIzSDh6TTEwLDIySDExVjIzSDEwek0xMSwyMkgxMlYyM0gxMXpNMTMsMjJIMTRWMjNIMTN6TTE0LDIySDE1VjIzSDE0ek0xNiwyMkgxN1YyM0gxNnpNMTcsMjJIMThWMjNIMTd6TTE4LDIySDE5VjIzSDE4ek0xOSwyMkgyMFYyM0gxOXpNMjAsMjJIMjFWMjNIMjB6TTIxLDIySDIyVjIzSDIxek0yMiwyMkgyM1YyM0gyMnpNMiwyM0gzVjI0SDJ6TTQsMjNINVYyNEg0ek01LDIzSDZWMjRINXpNNiwyM0g3VjI0SDZ6TTgsMjNIOVYyNEg4ek0xMCwyM0gxMVYyNEgxMHpNMTMsMjNIMTRWMjRIMTN6TTE1LDIzSDE2VjI0SDE1ek0xNiwyM0gxN1YyNEgxNnpNMTcsMjNIMThWMjRIMTd6TTIwLDIzSDIxVjI0SDIwek0yNSwyM0gyNlYyNEgyNXpNMjYsMjNIMjdWMjRIMjZ6TTIsMjRIM1YyNUgyek00LDI0SDVWMjVINHpNNSwyNEg2VjI1SDV6TTYsMjRIN1YyNUg2ek04LDI0SDlWMjVIOHpNMTEsMjRIMTJWMjVIMTF6TTEyLDI0SDEzVjI1SDEyek0xMywyNEgxNFYyNUgxM3pNMTQsMjRIMTVWMjVIMTR6TTE5LDI0SDIwVjI1SDE5ek0yMiwyNEgyM1YyNUgyMnpNMjMsMjRIMjRWMjVIMjN6TTI0LDI0SDI1VjI1SDI0ek0yNSwyNEgyNlYyNUgyNXpNMjYsMjRIMjdWMjVIMjZ6TTIsMjVIM1YyNkgyek04LDI1SDlWMjZIOHpNMTAsMjVIMTFWMjZIMTB6TTExLDI1SDEyVjI2SDExek0xNiwyNUgxN1YyNkgxNnpNMjEsMjVIMjJWMjZIMjF6TTIyLDI1SDIzVjI2SDIyek0yNCwyNUgyNVYyNkgyNHpNMjUsMjVIMjZWMjZIMjV6TTI2LDI1SDI3VjI2SDI2ek0yLDI2SDNWMjdIMnpNMywyNkg0VjI3SDN6TTQsMjZINVYyN0g0ek01LDI2SDZWMjdINXpNNiwyNkg3VjI3SDZ6TTcsMjZIOFYyN0g3ek04LDI2SDlWMjdIOHpNMTAsMjZIMTFWMjdIMTB6TTExLDI2SDEyVjI3SDExek0xMiwyNkgxM1YyN0gxMnpNMTQsMjZIMTVWMjdIMTR6TTE2LDI2SDE3VjI3SDE2ek0xOCwyNkgxOVYyN0gxOHpNMTksMjZIMjBWMjdIMTl6TTIzLDI2SDI0VjI3SDIzek0yNiwyNkgyN1YyN0gyNnoiIGlkPSJxci1wYXRoIiBmaWxsPSIjMDAwMDAwIiBmaWxsLW9wYWNpdHk9IjEiIGZpbGwtcnVsZT0ibm9uemVybyIgc3Ryb2tlPSJub25lIiAvPjwvc3ZnPg==" alt="QR Website" style="width: 260px; height: 260px;">
+                            </div>
+                            <div style="margin-top: 20px; font-size: 22px; font-weight: 700; color: #111;">Página oficial</div>
+                            <div style="margin-top: 8px; font-size: 15px; color: #155dfc; font-weight: 600;">www.goagent.com.mx</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">Descargar</div>
+                    <div class="slide-number">14 / 15</div>
+                </div>
+            </section>
+
+            <!-- SLIDE 15: Q&A -->
+            <section class="slide qa-slide" data-notes="Ahora con gusto respondo sus preguntas. Algunas preguntas frecuentes que les pueden surgir: ¿Funciona con otras aseguradoras? — Por ahora es exclusivo para Seguros Monterrey, pero estamos trabajando en expandir a más aseguradoras. ¿Qué pasa si cambio de computadora? — Sus datos están en la nube, solo instalan la extensión en la nueva computadora e inician sesión. ¿Mis datos están seguros? — Totalmente, usamos encriptación y cada agente solo ve sus propias pólizas.">
+                <div class="slide-content">
+                    <div class="qa-icon reveal">💬</div>
+                    <h2 class="slide-title reveal" style="text-align: center;">¿Preguntas?</h2>
+                    <p class="slide-subtitle reveal" style="text-align: center;">Estoy aquí para resolver cualquier duda.</p>
+                </div>
+                <div class="bottom-bar">
+                    <div class="pill">Q&A</div>
+                    <div class="slide-number">15 / 15</div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Speaker Notes Panel -->
+    <div class="speaker-notes-panel" id="speakerNotes">
+        <div class="sn-label">Notas del presentador (N para toggle)</div>
+        <div id="notesContent"></div>
+    </div>
+
+    <!-- Inline Editing -->
+    <div class="edit-hotzone" id="editHotzone"></div>
+    <button class="edit-toggle" id="editToggle" title="Edit mode (E)">✏️</button>
+
+    <script>
+        /* === SLIDE PRESENTATION CONTROLLER === */
+        class SlidePresentation {
+            constructor() {
+                this.slides = document.querySelectorAll('.slide');
+                this.currentSlide = 0;
+                this.stage = document.getElementById('deckStage');
+                this.notesPanel = document.getElementById('speakerNotes');
+                this.notesContent = document.getElementById('notesContent');
+                this.notesVisible = false;
+                this.setupStageScale();
+                this.setupKeyboardNav();
+                this.setupTouchNav();
+                this.showSlide(0);
+            }
+
+            setupStageScale() {
+                const scale = () => {
+                    const factor = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+                    const x = (window.innerWidth - 1920 * factor) / 2;
+                    const y = (window.innerHeight - 1080 * factor) / 2;
+                    this.stage.style.transform = `translate(${x}px, ${y}px) scale(${factor})`;
+                };
+                scale();
+                window.addEventListener('resize', scale);
+            }
+
+            setupKeyboardNav() {
+                document.addEventListener('keydown', (e) => {
+                    if (e.target.getAttribute('contenteditable')) return;
+                    switch(e.key) {
+                        case 'ArrowRight':
+                        case 'ArrowDown':
+                        case ' ':
+                        case 'PageDown':
+                            e.preventDefault();
+                            this.next();
+                            break;
+                        case 'ArrowLeft':
+                        case 'ArrowUp':
+                        case 'PageUp':
+                            e.preventDefault();
+                            this.prev();
+                            break;
+                        case 'Home':
+                            e.preventDefault();
+                            this.showSlide(0);
+                            break;
+                        case 'End':
+                            e.preventDefault();
+                            this.showSlide(this.slides.length - 1);
+                            break;
+                        case 'n':
+                        case 'N':
+                            this.toggleNotes();
+                            break;
+                    }
+                });
+            }
+
+            setupTouchNav() {
+                let startX = 0;
+                let startY = 0;
+                document.addEventListener('touchstart', (e) => {
+                    startX = e.touches[0].clientX;
+                    startY = e.touches[0].clientY;
+                });
+                document.addEventListener('touchend', (e) => {
+                    const dx = e.changedTouches[0].clientX - startX;
+                    const dy = e.changedTouches[0].clientY - startY;
+                    if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+                        dx < 0 ? this.next() : this.prev();
+                    }
+                });
+            }
+
+            next() { this.showSlide(this.currentSlide + 1); }
+            prev() { this.showSlide(this.currentSlide - 1); }
+
+            showSlide(index) {
+                this.currentSlide = Math.max(0, Math.min(index, this.slides.length - 1));
+                this.slides.forEach((slide, i) => {
+                    const isActive = i === this.currentSlide;
+                    slide.classList.toggle('active', isActive);
+                    slide.classList.toggle('visible', isActive);
+                });
+                this.updateNotes();
+            }
+
+            toggleNotes() {
+                this.notesVisible = !this.notesVisible;
+                this.notesPanel.classList.toggle('visible', this.notesVisible);
+                this.updateNotes();
+            }
+
+            updateNotes() {
+                const slide = this.slides[this.currentSlide];
+                const notes = slide.getAttribute('data-notes') || 'Sin notas para esta diapositiva.';
+                this.notesContent.textContent = notes;
+            }
+        }
+
+        /* === INLINE EDITOR === */
+        class InlineEditor {
+            constructor() {
+                this.isActive = false;
+                this.toggle = document.getElementById('editToggle');
+                this.hotzone = document.getElementById('editHotzone');
+                this.hideTimeout = null;
+                this.setupEvents();
+            }
+
+            setupEvents() {
+                this.toggle.addEventListener('click', () => this.toggleEditMode());
+                this.hotzone.addEventListener('click', () => this.toggleEditMode());
+
+                this.hotzone.addEventListener('mouseenter', () => {
+                    clearTimeout(this.hideTimeout);
+                    this.toggle.classList.add('show');
+                });
+                this.hotzone.addEventListener('mouseleave', () => {
+                    this.hideTimeout = setTimeout(() => {
+                        if (!this.isActive) this.toggle.classList.remove('show');
+                    }, 400);
+                });
+                this.toggle.addEventListener('mouseenter', () => clearTimeout(this.hideTimeout));
+                this.toggle.addEventListener('mouseleave', () => {
+                    this.hideTimeout = setTimeout(() => {
+                        if (!this.isActive) this.toggle.classList.remove('show');
+                    }, 400);
+                });
+
+                document.addEventListener('keydown', (e) => {
+                    if ((e.key === 'e' || e.key === 'E') && !e.target.getAttribute('contenteditable')) {
+                        this.toggleEditMode();
+                    }
+                    if (e.key === 's' && (e.ctrlKey || e.metaKey) && this.isActive) {
+                        e.preventDefault();
+                        this.save();
+                    }
+                });
+            }
+
+            toggleEditMode() {
+                this.isActive = !this.isActive;
+                this.toggle.classList.toggle('active', this.isActive);
+                this.toggle.textContent = this.isActive ? '💾' : '✏️';
+                document.querySelectorAll('.slide-title, .slide-subtitle, .eyebrow, .bullet-list li, .stat-label, .stat-desc, .step-title, .step-desc, .fc-title, .fc-desc, .impact-label, .impact-desc, .sc-title, .sc-desc, .big-quote, .pc-price, .pc-desc, .pricing-features li, .contact-info, .mc-text').forEach(el => {
+                    el.contentEditable = this.isActive;
+                });
+                if (!this.isActive) this.save();
+            }
+
+            save() {
+                localStorage.setItem('goagent-presentation', document.getElementById('deckStage').innerHTML);
+            }
+        }
+
+        const presentation = new SlidePresentation();
+        const editor = new InlineEditor();
+
+        // Restore saved edits
+        const saved = localStorage.getItem('goagent-presentation');
+        if (saved) {
+            document.getElementById('deckStage').innerHTML = saved;
+            presentation.slides = document.querySelectorAll('.slide');
+            presentation.showSlide(0);
+        }
+    </script>
+</body>
+</html>

@@ -34,9 +34,11 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [docsOpen, setDocsOpen] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
+  const docsRef = useRef<HTMLDivElement>(null);
 
   const isAuthenticated = auth?.session != null;
   const isSubscribed = subscription?.isSubscribed ?? false;
@@ -50,6 +52,9 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
       }
       if (profileRef.current && !profileRef.current.contains(e.target as Node)) {
         setProfileOpen(false);
+      }
+      if (docsRef.current && !docsRef.current.contains(e.target as Node)) {
+        setDocsOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -125,6 +130,31 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
       <DesktopView>
         <CustomNavLink to="/privacy">Privacidad</CustomNavLink>
         <CustomNavLink to="/pricing">Precios</CustomNavLink>
+
+        {/* Documentos dropdown */}
+        <DocsWrapper ref={docsRef}>
+          <DocsBtn onClick={() => setDocsOpen((v) => !v)}>
+            <Icon iconName="Description" size={16} />
+            <span>Documentos</span>
+            <Icon
+              iconName={docsOpen ? "ExpandLess" : "ExpandMore"}
+              size={14}
+            />
+          </DocsBtn>
+          {docsOpen && (
+            <DocsDropdown>
+              <DocsLink
+                href="/presentacion-goagent.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setDocsOpen(false)}
+              >
+                <Icon iconName="Slideshow" size={16} />
+                <span>Presentación GoAgent</span>
+              </DocsLink>
+            </DocsDropdown>
+          )}
+        </DocsWrapper>
 
         {isAuthenticated ? (
           <>
@@ -281,6 +311,16 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
               <Icon iconName="SupportAgent" size={18} />
               <span>Soporte</span>
             </DrawerLink>
+
+            <DrawerExternalLink
+              href="/presentacion-goagent.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMenuOpen(false)}
+            >
+              <Icon iconName="Slideshow" size={18} />
+              <span>Presentación GoAgent</span>
+            </DrawerExternalLink>
 
             {isAuthenticated ? (
               <>
@@ -442,6 +482,52 @@ const Divider = styled.div`
   background: ${(p) =>
     p.theme.mode === "Dark" ? "rgba(255,255,255,0.12)" : "rgba(0,0,0,0.1)"};
   margin: 0 6px;
+`;
+
+// ── Documentos dropdown (desktop) ──────────────────────────────────────────────
+
+const DocsWrapper = styled.div`
+  position: relative;
+`;
+
+const DocsBtn = styled.button`
+  ${navLinkBase}
+  background: none;
+  border: none;
+  cursor: pointer;
+  gap: 5px;
+`;
+
+const DocsDropdown = styled.div`
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  min-width: 220px;
+  border-radius: 12px;
+  padding: 6px;
+  animation: ${fadeDown} 0.2s ease;
+  z-index: 200;
+  ${sectionTheme__css}
+  ${sectionBorderTheme__css}
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
+`;
+
+const DocsLink = styled.a`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.15s;
+  ${textTheme__css}
+
+  &:hover {
+    background: ${(p) =>
+      p.theme.mode === "Dark" ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)"};
+  }
 `;
 
 // ── Profile dropdown (desktop) ─────────────────────────────────────────────────
@@ -750,6 +836,24 @@ const DrawerLink = styled(NavLink)`
     color: #155dfc;
     background: ${(p) =>
       p.theme.mode === "Dark" ? "rgba(21,93,252,0.12)" : "rgba(21,93,252,0.08)"};
+  }
+`;
+
+const DrawerExternalLink = styled.a`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: background 0.15s;
+  ${textTheme__css}
+
+  &:hover {
+    background: ${(p) =>
+      p.theme.mode === "Dark" ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)"};
   }
 `;
 
