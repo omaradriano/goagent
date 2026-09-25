@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Button } from "@/components/animate-ui/components/buttons/button";
 import { FRONTEND_URL } from "../../shared/env.js";
 import {
+  getRememberedEmail,
   openTab,
   sendToBackground,
   type SessionData,
@@ -17,6 +18,24 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
   const [password, setPassword] = useState("");
   const [invalidCredentials, setInvalidCredentials] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const passwordRef = useRef<HTMLInputElement>(null);
+
+  // Prellena el ultimo correo usado y deja el cursor en la contrasena.
+  useEffect(() => {
+    let cancelled = false;
+    getRememberedEmail()
+      .then((remembered) => {
+        if (cancelled || !remembered) return;
+        setEmail((current) => current || remembered);
+        passwordRef.current?.focus();
+      })
+      .catch(() => {
+        /* sin correo recordado: el login funciona igual */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleLogin = async (event: FormEvent) => {
     event.preventDefault();
@@ -68,6 +87,7 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
               Contraseña
             </span>
             <input
+              ref={passwordRef}
               type="password"
               autoComplete="current-password"
               value={password}
@@ -92,6 +112,16 @@ export function AuthView({ onAuthenticated }: AuthViewProps) {
           Iniciar sesión
         </Button>
       </form>
+
+      <Button
+        type="button"
+        variant="outline"
+        hoverScale={1.02}
+        onClick={() => openTab(`${FRONTEND_URL}/auth/signin?from=extension`)}
+        className="mb-1.5 w-full"
+      >
+        Iniciar sesión desde GoAgent web
+      </Button>
 
       <p className="my-2.5 flex w-full items-center justify-center gap-1.5 text-[0.95rem] text-muted-foreground">
         Aún no tienes cuenta?

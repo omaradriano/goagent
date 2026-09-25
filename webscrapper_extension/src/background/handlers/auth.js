@@ -102,3 +102,39 @@ async function checkPasswordExists(email) {
   }
   return { hasPassword: true };
 }
+
+// Sesion iniciada en la web de GoAgent (goagent.com.mx/auth/signin?from=extension):
+// la pagina envia su JWT via chrome.runtime.sendMessage(EXTENSION_ID, ...).
+// Solo llega desde los origenes de "externally_connectable" del manifest. El
+// token se valida contra el backend ANTES de guardarlo como sesion de la
+// extension; tambien se recuerda el correo para prellenar el login.
+export async function handleSetWebSession(request, sender, sendResponse) {
+  const jwt = request.jwt;
+  if (typeof jwt !== "string" || jwt.length === 0) {
+    sendResponse({ success: false, message: "Token no recibido" });
+    return;
+  }
+
+  try {
+    const res = await fetch(`${SERVER_URL}/v1/auth/checkSession`, {
+      headers: { Authorization: `Bearer ${jwt}` },
+    });
+    const data = await res.json().catch(() => null);
+
+    if (!res.ok || !data?.success) {
+      sendResponse({ success: false, message: "Sesión inválida o expirada" });
+      return;
+    }
+
+    await chrome.storage.local.set({
+      jwt,
+      last_login_email: data.payload.email,
+    });
+    console.log(
+      `[GoAgent][auth] sesion recibida desde la web (${sender.origin})`,
+    );
+    sendResponse({ success: true, email: data.payload.email });
+  } catch (error) {
+    sendResponse({ success: false, message: error.message });
+  }
+}

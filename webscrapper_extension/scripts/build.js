@@ -88,7 +88,8 @@ const contentConfig = {
 
 // En builds locales se marca el manifest generado en dist (no el de public)
 // para distinguir la extension sin empaquetar de la publicada en
-// chrome://extensions y en el tooltip del icono.
+// chrome://extensions y en el tooltip del icono, y se permite al frontend
+// local enviar la sesion web (externally_connectable).
 function markManifestAsDev() {
   const manifestPath = resolve(root, "dist/manifest.json");
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
@@ -96,6 +97,12 @@ function markManifestAsDev() {
   if (manifest.action?.default_title) {
     manifest.action.default_title = `${manifest.action.default_title} (DEV)`;
   }
+  // El frontend local (vite dev) tambien puede enviar la sesion web.
+  manifest.externally_connectable ??= { matches: [] };
+  manifest.externally_connectable.matches.push(
+    "http://localhost:5173/*",
+    "http://localhost:5174/*",
+  );
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
 }
 

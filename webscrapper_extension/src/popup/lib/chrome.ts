@@ -47,3 +47,19 @@ export async function getActiveTab(): Promise<chrome.tabs.Tab> {
 export function openTab(url: string) {
   chrome.tabs.create({ url });
 }
+
+// Ultimo correo con el que se inicio sesion, para prellenar el login. Llave
+// separada de "jwt": cerrar sesion (que borra "jwt") no lo olvida. Nunca se
+// guarda la contrasena.
+const LAST_EMAIL_KEY = "last_login_email";
+
+export async function getRememberedEmail(): Promise<string> {
+  const stored = await chrome.storage.local.get(LAST_EMAIL_KEY);
+  const value = stored[LAST_EMAIL_KEY];
+  return typeof value === "string" ? value : "";
+}
+
+export async function rememberEmail(email: string) {
+  if (!email) return;
+  await chrome.storage.local.set({ [LAST_EMAIL_KEY]: email });
+}

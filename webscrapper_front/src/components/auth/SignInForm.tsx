@@ -1,14 +1,28 @@
-import React, { useContext, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { AuthButton, CredentialAlert, InputText } from "./styles";
-import { useNavigate } from "react-router";
+import { useLocation, useNavigate } from "react-router";
 import { AuthContext } from "../../Context/ContextConfig";
 import type { session_claims } from "../../Types/types";
 import styled from "styled-components";
+import {
+  isExtensionLoginRequest,
+  sendSessionToExtension,
+} from "../../functions/extensionBridge";
 
 const SignInForm: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const formRef = useRef<HTMLFormElement>(null);
 
   const auth = useContext(AuthContext);
+
+  // Login iniciado desde la extension (?from=extension): al tener sesion se
+  // le envia el JWT a la extension y se muestra /auth/loggedin.
+  const fromExtension = isExtensionLoginRequest(location.search);
+  // Evita enviar la sesion dos veces: tras el login tambien cambia
+  // isAuthenticated (lo que dispara el efecto de abajo), y StrictMode ejecuta
+  // los efectos dos veces en desarrollo.
+  const extensionLoginStarted = useRef(false);
 
   const [credentials, setCredentials] = React.useState({
     email: "",
@@ -19,6 +33,33 @@ const SignInForm: React.FC = () => {
     isValid: boolean;
     errorMessage: string;
   }>({ isValid: true, errorMessage: "" });
+
+  async function finishExtensionLogin(jwt: string): Promise<boolean> {
+    if (extensionLoginStarted.current) return false;
+    extensionLoginStarted.current = true;
+    const delivered = await sendSessionToExtension(jwt);
+    if (delivered) {
+      navigate("/auth/loggedin");
+      return true;
+    }
+    // Permite reintentar (ej. despues de instalar/actualizar la extension).
+    extensionLoginStarted.current = false;
+    setShowError({
+      isValid: false,
+      errorMessage:
+        "Iniciaste sesión en la web, pero no se pudo conectar con la extensión. Verifica que esté instalada y actualizada, o inicia sesión desde el popup.",
+    });
+    return false;
+  }
+
+  // Si ya hay sesion en la web, no se piden credenciales otra vez: se le pasa
+  // directo a la extension.
+  useEffect(() => {
+    if (!fromExtension || !auth?.isAuthenticated) return;
+    const jwt = localStorage.getItem("session_jwt");
+    if (jwt) void finishExtensionLogin(jwt);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fromExtension, auth?.isAuthenticated]);
 
   async function handleSignIn(credentials: {
     email: string;
@@ -69,6 +110,12 @@ const SignInForm: React.FC = () => {
 
       auth?.setSession(session_data.payload);
       auth?.setIsAuthenticated(true);
+      if (fromExtension) {
+        // Si la extension no responde se queda en esta vista con el aviso
+        // (la sesion web ya quedo iniciada).
+        await finishExtensionLogin(auth_data.payload.jwt_token);
+        return;
+      }
       navigate("/dashboard");
     } else {
       console.error("Error al iniciar sesión:", auth_data.message);
@@ -80,12 +127,29 @@ const SignInForm: React.FC = () => {
   }
 
   return (
-    <>
-      <p>Inicia sesion para acceder al sistema</p>
+    // <form> real con name/autocomplete: el gestor de contrasenas de Chrome
+    // ofrece guardar y autocompletar las credenciales.
+    <form
+      ref={formRef}
+      // display: contents conserva el layout del contenedor (antes era un
+      // fragmento).
+      style={{ display: "contents" }}
+      onSubmit={(e) => {
+        e.preventDefault();
+        handleSignIn(credentials);
+      }}
+    >
+      <p>
+        {fromExtension
+          ? "Inicia sesion para conectar tu extension de GoAgent"
+          : "Inicia sesion para acceder al sistema"}
+      </p>
       <InputText>
         <p>Email</p>
         <input
           type="text"
+          name="email"
+          autoComplete="username"
           placeholder="tu@email.com"
           value={credentials.email}
           onChange={(e) =>
@@ -97,6 +161,8 @@ const SignInForm: React.FC = () => {
         <p>Contraseña</p>
         <input
           type="password"
+          name="password"
+          autoComplete="current-password"
           placeholder="Contraseña"
           value={credentials.password}
           onChange={(e) =>
@@ -109,7 +175,7 @@ const SignInForm: React.FC = () => {
           label="Iniciar sesión"
           type="DefaultBlue"
           action={() => {
-            handleSignIn(credentials);
+            formRef.current?.requestSubmit();
           }}
         />
         <ForgotPassLink onClick={()=>{navigate('/auth/resetpasswordinitflow')}}>Olvidé mi contraseña</ForgotPassLink>
@@ -120,7 +186,9 @@ const SignInForm: React.FC = () => {
         </CredentialAlert>
       ) : null}
       {/* <Button label="Entrar como Demo" type="Default" /> */}
-    </>
+      {/* Permite enviar con Enter (AuthButton es un div). */}
+      <button type="submit" hidden />
+    </form>
   );
 };
 

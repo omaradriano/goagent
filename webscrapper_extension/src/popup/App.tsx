@@ -5,6 +5,7 @@ import { AuthView } from "@/popup/views/AuthView";
 import { ManagementView } from "@/popup/views/ManagementView";
 import {
   getActiveTab,
+  rememberEmail,
   sendToBackground,
   type SessionData,
 } from "@/popup/lib/chrome";
@@ -43,6 +44,12 @@ export function App() {
   }, []);
 
   const goToSignin = () => setView({ name: "signin" });
+
+  // Cualquier sesion verificada (correo/contrasena o Google) actualiza el
+  // correo recordado para el proximo login.
+  useEffect(() => {
+    if (view.name === "management") void rememberEmail(view.session.email);
+  }, [view]);
 
   return (
     <div className="relative w-full bg-background p-2.5">
