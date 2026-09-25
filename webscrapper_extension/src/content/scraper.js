@@ -107,10 +107,15 @@ export function getPagerInfo() {
 
   let nextPage = null;
   let totalPages = currentPage;
+  // Paginas con link renderizado en el paginador: solo a esas se puede hacer
+  // postback (ASP.NET rechaza con "Invalid postback or callback argument"
+  // un Page$N que la grilla actual no renderizo).
+  const pages = [];
   for (const a of pagerLinks) {
     const match = a.getAttribute("href").match(/Page\$(\d+)/);
     if (!match) continue;
     const num = parseInt(match[1], 10);
+    if (!pages.includes(num)) pages.push(num);
     if (num > currentPage && (nextPage === null || num < nextPage)) {
       nextPage = num;
     }
@@ -119,7 +124,22 @@ export function getPagerInfo() {
     }
   }
 
-  return { currentPage, nextPage, totalPages };
+  return { currentPage, nextPage, totalPages, pages: pages.sort((a, b) => a - b) };
+}
+
+// Detecta la pagina de error de ASP.NET del portal ("Server Error in
+// '/AsesoresWeb' Application", ej. "Invalid postback or callback argument"):
+// se sirve en la misma URL, asi que el content script si se inyecta ahi.
+export function getPortalHealth() {
+  const heading = document.querySelector("h1")?.innerText ?? "";
+  const bodyStart = (document.body?.innerText ?? "").slice(0, 300);
+  if (/Server Error in '/i.test(heading) || /Server Error in '/i.test(bodyStart)) {
+    const detail = (document.querySelector("h2 i")?.innerText ?? "")
+      .trim()
+      .slice(0, 200);
+    return { ok: false, reason: "server-error", detail };
+  }
+  return { ok: true };
 }
 
 export function getLastPendingPaymentDate() {

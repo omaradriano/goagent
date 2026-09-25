@@ -9,6 +9,7 @@ import {
   getFlexiblePagos,
   getPageAgentNumber,
   getPagerInfo,
+  getPortalHealth,
 } from "./scraper.js";
 import {
   showNotification,
@@ -22,6 +23,7 @@ const handlers = {
   "get-unique-in-view": handleGetUniqueInView,
   "get-polizas-list": handleGetPolizasList,
   "get-pager-info": handleGetPagerInfo,
+  "check-portal-health": handleCheckPortalHealth,
   "post-all": handlePostAll,
   "scrapping-unique": handleScrappingUnique,
   "scrapping-all": handleScrappingAll,
@@ -61,6 +63,10 @@ function handleGetPolizasList(request, sender, sendResponse) {
 
 function handleGetPagerInfo(request, sender, sendResponse) {
   sendResponse({ success: true, data: getPagerInfo() });
+}
+
+function handleCheckPortalHealth(request, sender, sendResponse) {
+  sendResponse({ success: true, data: getPortalHealth() });
 }
 
 async function handlePostAll(request, sender, sendResponse) {

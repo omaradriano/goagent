@@ -1,6 +1,6 @@
 {
   "name": "goagent-extension",
-  "version": "2.0.0",
+  "version": "2.8.1",
   "type": "module",
   "description": "Extensión de Chrome para sincronizar pólizas desde Seguros Monterrey hacia GoAgent",
   "scripts": {

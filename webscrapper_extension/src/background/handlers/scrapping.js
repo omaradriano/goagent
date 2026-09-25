@@ -1,6 +1,6 @@
 import { apiRequest } from "../../shared/api.js";
 import { getSubscriptionStatus } from "../../shared/auth.js";
-import { waitForTabLoad } from "../tab-utils.js";
+import { waitForTabLoad, PortalError } from "../tab-utils.js";
 
 const LIST_PAGE_URL =
   "https://www.lineamonterrey.com.mx/AsesoresWeb/Consultas/Polizas/Asesor/PolizasAgente.aspx#robot";
@@ -186,6 +186,7 @@ async function scrapeCurrentDetailPage(tabId) {
 
   if (typeCheck.data.poliza_type_res === "recibosaportaciones") {
     await waitForTabLoad(tabId);
+    await assertPortalHealthy(tabId, "recibos de la póliza");
     const recibosRes = await chrome.tabs.sendMessage(tabId, {
       action: "get-recibos-last-payment",
     });
@@ -195,6 +196,7 @@ async function scrapeCurrentDetailPage(tabId) {
     scrapeRes.payload.tipo_poliza = "TRADICIONAL";
   } else if (typeCheck.data.poliza_type_res === "historicoaportaciones") {
     await waitForTabLoad(tabId);
+    await assertPortalHealthy(tabId, "histórico de aportaciones");
     scrapeRes.payload.ultimo_pago = "No definido";
     scrapeRes.payload.tipo_poliza = "FLEXIBLE";
     scrapeRes.payload.flexible = await captureFlexiblePayload(tabId);
@@ -205,22 +207,98 @@ async function scrapeCurrentDetailPage(tabId) {
   return scrapeRes.payload;
 }
 
+// Verifica que la pestana siga en el portal y que no muestre la pagina de
+// error de ASP.NET ("Server Error in '/AsesoresWeb' Application"). Sin esto
+// el sync seguia leyendo sobre la pagina de error y todas las polizas
+// siguientes fallaban (o la lista se leia vacia y el recorrido terminaba
+// antes de tiempo sin avisar).
+async function assertPortalHealthy(tabId, context) {
+  let url;
+  try {
+    url = (await chrome.tabs.get(tabId)).url;
+  } catch {
+    throw new PortalError(`La pestaña de sincronización se cerró (${context})`);
+  }
+  if (!url || !url.includes("lineamonterrey.com.mx")) {
+    throw new PortalError(
+      `El portal no respondió (${context}); la página terminó en ${url}`,
+    );
+  }
+
+  let res;
+  try {
+    res = await sendMessageWithRetries(tabId, { action: "check-portal-health" });
+  } catch {
+    // Pagina fuera de las URLs del content script (ej. login del portal por
+    // sesion expirada).
+    throw new PortalError(`No se pudo leer la página del portal (${context})`);
+  }
+  if (res?.data?.ok === false) {
+    const detail = res.data.detail ? `: ${res.data.detail}` : "";
+    throw new PortalError(`El portal respondió con error (${context})${detail}`);
+  }
+}
+
+function postBackPager(tabId, page) {
+  return chrome.scripting.executeScript({
+    target: { tabId },
+    world: "MAIN",
+    args: [`Page$${page}`],
+    func: (arg) => {
+      if (typeof __doPostBack === "function") {
+        __doPostBack("ctl00$ContentPlaceHolder1$GVPolList", arg);
+      }
+    },
+  });
+}
+
+async function readPager(tabId) {
+  const res = await sendMessageWithRetries(tabId, { action: "get-pager-info" });
+  return res?.data ?? { currentPage: 1, nextPage: null, totalPages: 1, pages: [] };
+}
+
+// Carga la lista desde cero (GET) y llega a targetPage usando solo links de
+// pagina que la grilla renderizo. Antes se disparaba Page$N a ciegas: si esa
+// lista no mostraba el link a N (filtro de busqueda activo en el portal,
+// cambio en el numero de paginas, paginador con rango "1..10 ...") el portal
+// respondia "Invalid postback or callback argument". Si N no esta visible se
+// avanza por el link mas lejano disponible (ej. "...") hasta llegar, y en
+// cada paso se confirma la pagina mostrada.
 async function goToListPage(tabId, targetPage) {
   await chrome.tabs.update(tabId, { url: LIST_PAGE_URL });
   await waitForTabLoad(tabId);
+  await assertPortalHealthy(tabId, "lista de pólizas");
 
-  if (targetPage > 1) {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      world: "MAIN",
-      args: [`Page$${targetPage}`],
-      func: (arg) => {
-        if (typeof __doPostBack === "function") {
-          __doPostBack("ctl00$ContentPlaceHolder1$GVPolList", arg);
-        }
-      },
-    });
+  let pager = await readPager(tabId);
+  for (let hops = 0; pager.currentPage !== targetPage; hops++) {
+    if (hops >= 20) {
+      throw new PortalError(
+        `No se pudo llegar a la página ${targetPage} de la lista del portal`,
+      );
+    }
+
+    const pages = pager.pages ?? [];
+    const step = pages.includes(targetPage)
+      ? targetPage
+      : Math.max(
+          ...pages.filter((p) => p > pager.currentPage && p < targetPage),
+        );
+    if (!Number.isFinite(step)) {
+      throw new PortalError(
+        `La página ${targetPage} no está disponible en la lista del portal (páginas visibles: ${pages.join(", ") || "ninguna"})`,
+      );
+    }
+
+    await postBackPager(tabId, step);
     await waitForTabLoad(tabId);
+    await assertPortalHealthy(tabId, `página ${step} de la lista`);
+
+    pager = await readPager(tabId);
+    if (pager.currentPage !== step) {
+      throw new PortalError(
+        `Se esperaba la página ${step} de la lista y el portal mostró la ${pager.currentPage}`,
+      );
+    }
   }
 }
 
@@ -260,6 +338,7 @@ async function capturePolizaByNum(tabId, pageNum, idPoliza) {
 
     await postBackTo(tabId, row.idPostback);
     await waitForTabLoad(tabId);
+    await assertPortalHealthy(tabId, `detalle de ${idPoliza}`);
 
     const payload = await scrapeCurrentDetailPage(tabId);
     if (payload.num_poliza === idPoliza) {
@@ -276,6 +355,12 @@ async function capturePolizaByNum(tabId, pageNum, idPoliza) {
 
   throw lastError;
 }
+
+// Errores del portal seguidos (sin una captura exitosa entre ellos) antes de
+// detener el recorrido.
+const MAX_CONSECUTIVE_PORTAL_ERRORS = 3;
+const PORTAL_ABORT_REASON =
+  "El portal de Seguros Monterrey respondió con errores varias veces seguidas y la sincronización se detuvo.";
 
 const NO_SUBSCRIPTION_MESSAGE =
   "Se requiere una suscripción activa para sincronizar tu cartera.";
@@ -497,17 +582,40 @@ export async function handlePostAllDb(request, sender, sendResponse) {
   }
 
   let hiddenTab = null;
+  // Motivo por el que el recorrido se detuvo antes de terminar (portal
+  // fallando repetidamente o error inesperado). Lo ya capturado se guarda
+  // igual en el envio final.
+  let abortReason = null;
 
   if (!syncInterruptRequested) {
+  try {
   hiddenTab = await chrome.tabs.create({
     url: LIST_PAGE_URL,
     active: false,
   });
   await waitForTabLoad(hiddenTab.id);
+  await assertPortalHealthy(hiddenTab.id, "lista de pólizas");
 
   let pageNum = 1;
+  let consecutivePortalErrors = 0;
+  // Polizas ya reintentadas tras recuperar la lista (un reintento por
+  // poliza por recorrido).
+  const retriedAfterRecovery = new Set();
 
   while (true) {
+    // La pestana puede haber quedado en una pagina de error (ej. fallo la
+    // recuperacion de la ultima poliza): sin esta verificacion la lista se
+    // leia vacia y el recorrido terminaba sin avisar.
+    try {
+      await assertPortalHealthy(hiddenTab.id, `página ${pageNum} de la lista`);
+    } catch (error) {
+      console.warn(
+        `[GoAgent][sync] la pagina ${pageNum} no esta sana, recargando la lista`,
+        error,
+      );
+      await goToListPage(hiddenTab.id, pageNum);
+    }
+
     const listRes = await chrome.tabs.sendMessage(hiddenTab.id, {
       action: "get-polizas-list",
     });
@@ -549,11 +657,9 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       })),
     );
 
-    const pagerRes = await chrome.tabs.sendMessage(hiddenTab.id, {
-      action: "get-pager-info",
-    });
-    const totalPages = pagerRes?.data?.totalPages ?? pageNum;
-    const nextPage = pagerRes?.data?.nextPage ?? null;
+    const pager = await readPager(hiddenTab.id);
+    const totalPages = pager.totalPages ?? pageNum;
+    const nextPage = pager.nextPage ?? null;
 
     console.log(
       `[GoAgent][sync] pagina ${pageNum} de ${totalPages}: ${toProcess.length} poliza(s) requieren accion de ${allPageItems.length} en la pagina`,
@@ -564,25 +670,31 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       const isNew = !dbEstatusMap.has(item.idPoliza);
 
       totalProcessed++;
+      // Avisos de progreso tolerantes: si el agente navego fuera del portal
+      // en la pestana original, no poder mostrarlos no debe detener el sync.
       if (notificationId) {
-        await chrome.tabs.sendMessage(originalTabId, {
-          action: "delete-notification",
-          data: { notification_id: notificationId },
-        });
+        await chrome.tabs
+          .sendMessage(originalTabId, {
+            action: "delete-notification",
+            data: { notification_id: notificationId },
+          })
+          .catch(() => {});
       }
 
-      notifRes = await chrome.tabs.sendMessage(originalTabId, {
-        action: "show-progress-message",
-        data: {
-          type: "loading",
-          status: "success",
-          message: `Cargando registro ${i + 1} de ${toProcess.length} (página ${pageNum} de ${totalPages})`,
-          submessage:
-            "Se está obteniendo información de pólizas, por favor espere...",
-          interruptible: true,
-        },
-      });
-      notificationId = notifRes.data.notification_id;
+      notifRes = await chrome.tabs
+        .sendMessage(originalTabId, {
+          action: "show-progress-message",
+          data: {
+            type: "loading",
+            status: "success",
+            message: `Cargando registro ${i + 1} de ${toProcess.length} (página ${pageNum} de ${totalPages})`,
+            submessage:
+              "Se está obteniendo información de pólizas, por favor espere...",
+            interruptible: true,
+          },
+        })
+        .catch(() => null);
+      notificationId = notifRes?.data?.notification_id ?? null;
 
       try {
         console.log(
@@ -615,15 +727,55 @@ export async function handlePostAllDb(request, sender, sendResponse) {
         }
 
         await goToListPage(hiddenTab.id, pageNum);
+        consecutivePortalErrors = 0;
       } catch (e) {
         console.error(
           `[GoAgent][sync] pagina ${pageNum} (${i + 1}/${toProcess.length}) fallo al capturar poliza`,
           item,
           e,
         );
-        failedPolizas.push({ poliza: item, error: e.message });
 
-        await goToListPage(hiddenTab.id, pageNum).catch(() => {});
+        if (!(e instanceof PortalError)) {
+          failedPolizas.push({ poliza: item, error: e.message });
+          await goToListPage(hiddenTab.id, pageNum).catch(() => {});
+        } else {
+          // El portal fallo: se recarga la lista desde cero y, si se
+          // recupera, se reintenta esta poliza una vez. Con errores seguidos
+          // el portal esta caido o inestable y se detiene el recorrido.
+          consecutivePortalErrors++;
+          let recovered = false;
+          try {
+            await goToListPage(hiddenTab.id, pageNum);
+            recovered = true;
+          } catch (recoveryError) {
+            consecutivePortalErrors++;
+            console.error(
+              `[GoAgent][sync] no se pudo recuperar la lista (pagina ${pageNum})`,
+              recoveryError,
+            );
+          }
+
+          if (consecutivePortalErrors >= MAX_CONSECUTIVE_PORTAL_ERRORS) {
+            failedPolizas.push({ poliza: item, error: e.message });
+            abortReason = PORTAL_ABORT_REASON;
+            console.error(
+              `[GoAgent][sync] ${consecutivePortalErrors} errores seguidos del portal, se detiene el recorrido`,
+            );
+            break;
+          }
+
+          if (recovered && !retriedAfterRecovery.has(item.idPoliza)) {
+            retriedAfterRecovery.add(item.idPoliza);
+            console.warn(
+              `[GoAgent][sync] lista recuperada, reintentando ${item.idPoliza}`,
+            );
+            i--;
+            totalProcessed--;
+            continue;
+          }
+
+          failedPolizas.push({ poliza: item, error: e.message });
+        }
       }
 
       if (syncInterruptRequested) {
@@ -634,7 +786,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       }
     }
 
-    if (syncInterruptRequested) {
+    if (syncInterruptRequested || abortReason) {
       break;
     }
 
@@ -647,18 +799,39 @@ export async function handlePostAllDb(request, sender, sendResponse) {
 
     console.log(`[GoAgent][sync] avanzando a la pagina ${nextPage}`);
 
-    await chrome.scripting.executeScript({
-      target: { tabId: hiddenTab.id },
-      world: "MAIN",
-      args: [`Page$${nextPage}`],
-      func: (arg) => {
-        if (typeof __doPostBack === "function") {
-          __doPostBack("ctl00$ContentPlaceHolder1$GVPolList", arg);
-        }
-      },
-    });
-    await waitForTabLoad(hiddenTab.id);
+    // Camino rapido: el link a nextPage viene del paginador de esta misma
+    // grilla. Si la pestana no esta sana o el portal falla, se reconstruye la
+    // navegacion desde cero con goToListPage.
+    let advanced = false;
+    try {
+      await assertPortalHealthy(hiddenTab.id, `lista antes de ir a la página ${nextPage}`);
+      await postBackPager(hiddenTab.id, nextPage);
+      await waitForTabLoad(hiddenTab.id);
+      await assertPortalHealthy(hiddenTab.id, `página ${nextPage} de la lista`);
+      advanced = (await readPager(hiddenTab.id)).currentPage === nextPage;
+    } catch (error) {
+      console.warn(
+        `[GoAgent][sync] fallo el avance directo a la pagina ${nextPage}, recargando la lista`,
+        error,
+      );
+    }
+    if (!advanced) {
+      await goToListPage(hiddenTab.id, nextPage);
+    }
     pageNum = nextPage;
+  }
+  } catch (error) {
+    // Cualquier falla fuera de la captura de una poliza (lista, paginador,
+    // pestana) termina el recorrido, pero lo capturado se envia igual abajo.
+    // Antes esto reventaba el handler y se perdian las altas acumuladas.
+    console.error(
+      "[GoAgent][sync] error durante el recorrido, se detiene y se guarda lo capturado",
+      error,
+    );
+    abortReason =
+      error instanceof PortalError
+        ? PORTAL_ABORT_REASON
+        : `La sincronización se detuvo por un error inesperado: ${error.message}`;
   }
   }
 
@@ -670,7 +843,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
   }
 
   console.log(
-    `[GoAgent][sync] recorrido finalizado: ${completedData.length} alta(s), ${refreshedCount} refresco(s), ${skippedCount} omitida(s) (interrumpido: ${syncInterruptRequested})`,
+    `[GoAgent][sync] recorrido finalizado: ${completedData.length} alta(s), ${refreshedCount} refresco(s), ${skippedCount} omitida(s) (interrumpido: ${syncInterruptRequested}, detenido: ${abortReason ?? "no"})`,
   );
 
   if (hiddenTab) {
@@ -678,10 +851,12 @@ export async function handlePostAllDb(request, sender, sendResponse) {
   }
 
   if (notificationId) {
-    await chrome.tabs.sendMessage(originalTabId, {
-      action: "delete-notification",
-      data: { notification_id: notificationId },
-    });
+    await chrome.tabs
+      .sendMessage(originalTabId, {
+        action: "delete-notification",
+        data: { notification_id: notificationId },
+      })
+      .catch(() => {});
   }
 
   // Aviso de polizas que no se pudieron capturar (ej. se abrio otra poliza,
@@ -693,6 +868,26 @@ export async function handlePostAllDb(request, sender, sendResponse) {
   ];
   const failedSubmessage =
     "Se reintentarán en la próxima sincronización. También puedes abrir el detalle de cada una en el portal y usar «Sincronizar registros» en la extensión.";
+  const abortSubmessage =
+    "Lo capturado hasta ese momento se guardó. Intenta de nuevo en unos minutos; si en la lista de pólizas del portal hay un filtro de búsqueda activo, límpialo antes de sincronizar.";
+
+  // Recorrido detenido (portal fallando o error inesperado) sin nada que
+  // guardar: se avisa el motivo en lugar de "todo al dia".
+  if (abortReason && completedData.length === 0 && refreshedCount === 0) {
+    await chrome.tabs.sendMessage(originalTabId, {
+      action: "show-progress-message",
+      data: {
+        type: "warning",
+        status: "success",
+        message: `${abortReason} No se guardaron cambios.`,
+        submessage: abortSubmessage,
+        details: failedNums,
+      },
+    });
+
+    sendResponse({ success: false, message: abortReason });
+    return;
+  }
 
   if (completedData.length === 0 && refreshedCount === 0 && failedNums.length > 0) {
     await chrome.tabs.sendMessage(originalTabId, {
@@ -749,7 +944,15 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     const hayFallidas = failedNums.length > 0;
     await chrome.tabs.sendMessage(originalTabId, {
       action: "show-progress-message",
-      data: hayFallidas
+      data: abortReason
+        ? {
+            type: "warning",
+            status: "success",
+            message: `${abortReason} Se guardaron ${resumen}.`,
+            submessage: abortSubmessage,
+            details: failedNums,
+          }
+        : hayFallidas
         ? {
             type: "warning",
             status: "success",
@@ -773,15 +976,30 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       : "";
     sendResponse({
       success: true,
-      message: syncInterruptRequested
-        ? `Sincronización interrumpida. ${resumen}.${fallidasTexto}`
-        : `Sincronización completada: ${resumen}.${fallidasTexto}`,
+      message: abortReason
+        ? `${abortReason} Se guardaron ${resumen}.${fallidasTexto}`
+        : syncInterruptRequested
+          ? `Sincronización interrumpida. ${resumen}.${fallidasTexto}`
+          : `Sincronización completada: ${resumen}.${fallidasTexto}`,
     });
   } catch (error) {
     console.error(
       `[GoAgent][sync] fallo el POST final a /v1/scrapping/polizas con ${completedData.length} poliza(s)`,
       error,
     );
+    // La notificacion de progreso ya se borro arriba: sin este aviso el
+    // agente no se enteraba de que las altas no se guardaron.
+    await chrome.tabs
+      .sendMessage(originalTabId, {
+        action: "show-progress-message",
+        data: {
+          type: "warning",
+          status: "success",
+          message: `No se pudieron guardar ${completedData.length} póliza(s) nueva(s).`,
+          submessage: `Error del servidor de GoAgent: ${error.message}. Vuelve a sincronizar para reintentar.`,
+        },
+      })
+      .catch(() => {});
     sendResponse({ success: false, message: error.message });
   }
 }
