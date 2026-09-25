@@ -1,0 +1,83 @@
+/* Tailwind para componentes de Animate UI / shadcn.
+
+   Sin preflight a proposito: el reset global de Tailwind (margenes, titulos,
+   botones, listas) cambiaria la apariencia de toda la web, hecha con
+   styled-components. Solo se cargan el tema y las utilidades, que afectan
+   unicamente a los elementos que usan sus clases.
+
+   "important": App.css y el GlobalStyle de styled-components tienen
+   "* { margin: 0; padding: 0 }" sin capa, que le ganaria a las utilidades
+   (que van en @layer) y dejaria sin padding a los componentes. Con
+   !important las utilidades ganan, y solo aplican a elementos con clases de
+   Tailwind (los componentes de Animate UI). */
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) important;
+
+/* Tokens con nombres de shadcn/ui (bg-primary, text-muted-foreground,
+   border-input, etc.), con la paleta azul de la web. */
+:root {
+  --radius: 0.5rem;
+
+  --background: #ffffff;
+  --foreground: #171717;
+  --card: #ffffff;
+  --card-foreground: #171717;
+  --popover: #ffffff;
+  --popover-foreground: #171717;
+
+  --primary: #155dfc;
+  --primary-foreground: #ffffff;
+  --secondary: #f1f5f9;
+  --secondary-foreground: #171717;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --accent: #e0e7ff;
+  --accent-foreground: #171717;
+  --destructive: #dc3545;
+  --destructive-foreground: #ffffff;
+
+  --border: #e2e8f0;
+  --input: #e2e8f0;
+  --ring: #6ea8fe;
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+/* Mini-reset solo para botones de Animate UI/shadcn (sus variantes siempre
+   incluyen "inline-flex"; las clases de styled-components son hashes y nunca
+   coinciden). Sustituye lo que haria el preflight: sin el, el navegador les
+   pone su borde y fondo por defecto. Las utilidades (!important) de cada
+   variante lo sobrescriben. */
+@layer base {
+  button:where([class~="inline-flex"]) {
+    border: 0 solid var(--border);
+    background-color: transparent;
+    font: inherit;
+    color: inherit;
+  }
+}
