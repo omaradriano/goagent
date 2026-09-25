@@ -990,6 +990,17 @@ func ApiPutPoliza(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	item.NumPoliza = strings.TrimSpace(item.NumPoliza)
+	if item.NumPoliza == "" {
+		services.HandleResponseError(http.StatusBadRequest, "No se pudo leer el número de póliza del detalle", w)
+		return
+	}
+	if item.ExpectedNumPoliza != "" && item.ExpectedNumPoliza != item.NumPoliza {
+		services.Log.ErrorMessage(fmt.Sprintf("PUT poliza rechazado: se esperaba %s y se capturo %s", item.ExpectedNumPoliza, item.NumPoliza))
+		services.HandleResponseError(http.StatusConflict, fmt.Sprintf("Se capturó la póliza %s en lugar de %s; no se guardaron cambios", item.NumPoliza, item.ExpectedNumPoliza), w)
+		return
+	}
+
 	agenteID, err := deps.AgenteRepo.FindIDByUUID(r.Context(), agenteUUID)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {

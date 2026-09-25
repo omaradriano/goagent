@@ -224,6 +224,59 @@ async function goToListPage(tabId, targetPage) {
   }
 }
 
+// Abre y captura el detalle de la poliza idPoliza desde la pagina pageNum de
+// la grilla. El postback de la grilla apunta a la POSICION de la fila
+// (GVPolList$ctlNN$lnkPoliza), no a la poliza: si el orden de la grilla
+// cambio desde que se leyo, un target viejo abre otra poliza. Por eso el
+// target se resuelve por numero de poliza justo antes de cada postback, y lo
+// capturado se valida contra el numero esperado - nunca se devuelve el
+// detalle de otra poliza (antes eso terminaba guardando datos/asegurados
+// ajenos sobre la poliza esperada). Un reintento desde la grilla; si sigue
+// sin coincidir, lanza error y la poliza queda como fallida.
+async function capturePolizaByNum(tabId, pageNum, idPoliza) {
+  const maxAttempts = 2;
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    if (attempt > 1) {
+      await goToListPage(tabId, pageNum);
+    }
+
+    const listRes = await chrome.tabs.sendMessage(tabId, {
+      action: "get-polizas-list",
+    });
+    const row = (listRes?.data?.polizas ?? []).find(
+      (p) => p.idPoliza === idPoliza,
+    );
+    if (!row) {
+      lastError = new Error(
+        `La póliza ${idPoliza} no aparece en la página ${pageNum} de la grilla`,
+      );
+      console.warn(
+        `[GoAgent][sync] intento ${attempt}/${maxAttempts}: ${lastError.message}`,
+      );
+      continue;
+    }
+
+    await postBackTo(tabId, row.idPostback);
+    await waitForTabLoad(tabId);
+
+    const payload = await scrapeCurrentDetailPage(tabId);
+    if (payload.num_poliza === idPoliza) {
+      return payload;
+    }
+
+    lastError = new Error(
+      `Se abrió la póliza ${payload.num_poliza || "(desconocida)"} en lugar de ${idPoliza}; no se guardó`,
+    );
+    console.warn(
+      `[GoAgent][sync] intento ${attempt}/${maxAttempts}: ${lastError.message}`,
+    );
+  }
+
+  throw lastError;
+}
+
 const NO_SUBSCRIPTION_MESSAGE =
   "Se requiere una suscripción activa para sincronizar tu cartera.";
 
@@ -529,10 +582,11 @@ export async function handlePostAllDb(request, sender, sendResponse) {
           item,
         );
 
-        await postBackTo(hiddenTab.id, item.idPostback);
-        await waitForTabLoad(hiddenTab.id);
-
-        const payload = await scrapeCurrentDetailPage(hiddenTab.id);
+        const payload = await capturePolizaByNum(
+          hiddenTab.id,
+          pageNum,
+          item.idPoliza,
+        );
 
         console.log(
           `[GoAgent][sync] pagina ${pageNum} (${i + 1}/${toProcess.length}) capturado`,
@@ -544,7 +598,10 @@ export async function handlePostAllDb(request, sender, sendResponse) {
         } else {
           await apiRequest("/v1/scrapping/poliza", {
             method: "PUT",
-            body: JSON.stringify({ ...payload, num_poliza: item.idPoliza }),
+            body: JSON.stringify({
+              ...payload,
+              expected_num_poliza: item.idPoliza,
+            }),
           });
           refreshedCount++;
         }

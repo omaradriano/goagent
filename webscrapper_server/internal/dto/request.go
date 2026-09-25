@@ -22,6 +22,11 @@ type PostItem_Poliza struct {
 	SinPendientes bool                     `json:"sin_pendientes"`
 	TipoPoliza    string                   `json:"tipo_poliza"`
 	Flexible      *PostItem_PolizaFlexible `json:"flexible,omitempty"`
+
+	// Numero que el resync de cartera pretendia abrir; si no coincide con
+	// NumPoliza (el leido del detalle) se capturo otra poliza y el PUT se
+	// rechaza.
+	ExpectedNumPoliza string `json:"expected_num_poliza,omitempty"`
 }
 
 type PostItem_PolizaFlexiblePago struct {
