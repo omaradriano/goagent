@@ -251,10 +251,11 @@ async function handleFullResync(event) {
     currentWindow: true,
   });
 
-  const total = elements.tagTotal.innerText || "todas las";
+  // No se muestra un conteo: lo registrado en BD puede ser menor que lo que
+  // hay en el portal, y el recorrido cubre todas las paginas del portal.
   alertModal.show(
     "Resincronización completa",
-    `Se abrirá el detalle de ${total} pólizas de tu cartera y se sobrescribirán sus datos con lo que muestra el portal. Puede tardar bastante; puedes interrumpirla desde la notificación. Desea continuar?`,
+    "Se recorrerá toda tu cartera en el portal (todas las páginas) y se abrirá el detalle de cada póliza: las registradas se sobrescribirán con lo que muestra el portal y las que falten se darán de alta. Puede tardar bastante; puedes interrumpirla desde la notificación. Desea continuar?",
     async () => {
       try {
         const res = await chrome.tabs.sendMessage(tab.id, {
