@@ -676,6 +676,35 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     });
   }
 
+  // Aviso de polizas que no se pudieron capturar (ej. se abrio otra poliza,
+  // o el portal respondio con error): no se guardo nada de ellas y se
+  // reintentan en el proximo sync, o el agente puede sincronizarlas a mano
+  // desde su detalle.
+  const failedNums = [
+    ...new Set(failedPolizas.map((f) => f.poliza.idPoliza)),
+  ];
+  const failedSubmessage =
+    "Se reintentarán en la próxima sincronización. También puedes abrir el detalle de cada una en el portal y usar «Sincronizar registros» en la extensión.";
+
+  if (completedData.length === 0 && refreshedCount === 0 && failedNums.length > 0) {
+    await chrome.tabs.sendMessage(originalTabId, {
+      action: "show-progress-message",
+      data: {
+        type: "warning",
+        status: "success",
+        message: `No se pudieron sincronizar ${failedNums.length} póliza(s):`,
+        submessage: failedSubmessage,
+        details: failedNums,
+      },
+    });
+
+    sendResponse({
+      success: true,
+      message: `Sincronización sin cambios guardados; ${failedNums.length} póliza(s) fallaron`,
+    });
+    return;
+  }
+
   if (completedData.length === 0 && refreshedCount === 0) {
     await chrome.tabs.sendMessage(originalTabId, {
       action: "show-progress-message",
@@ -709,24 +738,36 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     }
 
     const resumen = `${completedData.length} nueva(s), ${refreshedCount} actualizada(s)`;
+    const hayFallidas = failedNums.length > 0;
     await chrome.tabs.sendMessage(originalTabId, {
       action: "show-progress-message",
-      data: {
-        type: "done",
-        status: "success",
-        message: syncInterruptRequested
-          ? `Sincronización interrumpida. ${resumen} antes de detenerse.`
-          : "Se ha completado la sincronización.",
-        submessage:
-          "Ahora puede consultar los detalles de sus pólizas en la sección de mis pólizas en la aplicación web.",
-      },
+      data: hayFallidas
+        ? {
+            type: "warning",
+            status: "success",
+            message: `${syncInterruptRequested ? "Sincronización interrumpida" : "Sincronización completada"} (${resumen}), pero ${failedNums.length} póliza(s) no se pudieron sincronizar:`,
+            submessage: failedSubmessage,
+            details: failedNums,
+          }
+        : {
+            type: "done",
+            status: "success",
+            message: syncInterruptRequested
+              ? `Sincronización interrumpida. ${resumen} antes de detenerse.`
+              : "Se ha completado la sincronización.",
+            submessage:
+              "Ahora puede consultar los detalles de sus pólizas en la sección de mis pólizas en la aplicación web.",
+          },
     });
 
+    const fallidasTexto = hayFallidas
+      ? ` ${failedNums.length} póliza(s) fallaron.`
+      : "";
     sendResponse({
       success: true,
       message: syncInterruptRequested
-        ? `Sincronización interrumpida. ${resumen}.`
-        : `Sincronización completada: ${resumen}.`,
+        ? `Sincronización interrumpida. ${resumen}.${fallidasTexto}`
+        : `Sincronización completada: ${resumen}.${fallidasTexto}`,
     });
   } catch (error) {
     console.error(

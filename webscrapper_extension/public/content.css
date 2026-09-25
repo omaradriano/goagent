@@ -39,6 +39,16 @@
   line-height: 1.4;
 }
 
+.notification .details {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  max-height: 140px;
+  overflow-y: auto;
+  color: #171717;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .notification .interruptSync {
   align-self: flex-start;
   margin-top: 4px;

@@ -22,6 +22,7 @@ export function showNotification(options) {
           ? `
         <p class="message">${options.message}</p>
         <span class="submessage">${options.submessage}</span>
+        ${Array.isArray(options.details) && options.details.length > 0 ? `<ul class="details"></ul>` : ""}
         ${
           options.interruptible
             ? `<button type="button" class="interruptSync">Interrumpir carga</button>`
@@ -38,6 +39,17 @@ export function showNotification(options) {
       <img src="${deleteIcon}"/>
     </span>
   `;
+
+  // Los detalles (ej. numeros de poliza) se insertan como texto, no como
+  // HTML, porque vienen de lo leido en el portal.
+  const detailsList = notification.querySelector(".details");
+  if (detailsList) {
+    for (const detail of options.details) {
+      const li = document.createElement("li");
+      li.textContent = detail;
+      detailsList.appendChild(li);
+    }
+  }
 
   notification.classList.add("notification");
   notification
