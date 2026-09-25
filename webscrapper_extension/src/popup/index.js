@@ -1,6 +1,7 @@
 import { Alert } from "./components/alert.js";
 import { Loader } from "./components/loader.js";
 import { setupAuthView } from "./views/auth.js";
+import { IS_DEV, SERVER_URL } from "../shared/env.js";
 import {
   setupManagementView,
   loadManagementUI,
@@ -17,7 +18,19 @@ function changeView(viewName) {
   });
 }
 
+function showDevTag() {
+  const header = document.querySelector(".extension__header");
+  if (!header) return;
+  const tag = document.createElement("span");
+  tag.className = "extension__dev-tag";
+  tag.textContent = "DEV";
+  tag.title = `Build de desarrollo - API: ${SERVER_URL}`;
+  header.appendChild(tag);
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
+  if (IS_DEV) showDevTag();
+
   const loader = new Loader();
   loader.show();
 
