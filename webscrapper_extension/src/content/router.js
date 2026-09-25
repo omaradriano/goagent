@@ -68,6 +68,7 @@ async function handlePostAll(request, sender, sendResponse) {
     const backgroundRes = await chrome.runtime.sendMessage({
       tab: request.tab,
       action: "post-all-db",
+      full: request.full === true,
     });
 
     sendResponse({ ...backgroundRes });

@@ -421,6 +421,9 @@ export async function handlePostUniqueDb(request, sender, sendResponse) {
 
 export async function handlePostAllDb(request, sender, sendResponse) {
   const originalTabId = request.tab;
+  // fullResync: se abre y sobrescribe cada poliza de la cartera, ignorando
+  // el filtro de sincronizacion parcial (candidatas/mismatch de estatus).
+  const fullResync = request.full === true;
 
   if (await blockIfNoActiveSubscription(originalTabId)) {
     sendResponse({ success: false, message: NO_SUBSCRIPTION_MESSAGE });
@@ -436,7 +439,9 @@ export async function handlePostAllDb(request, sender, sendResponse) {
   syncInterruptRequested = false;
 
   console.log(
-    "[GoAgent][sync] iniciando sincronizacion/re-sincronizacion de todas las paginas disponibles",
+    fullResync
+      ? "[GoAgent][sync] iniciando RESINCRONIZACION COMPLETA de todas las paginas (sin filtro parcial)"
+      : "[GoAgent][sync] iniciando sincronizacion/re-sincronizacion de todas las paginas disponibles",
   );
 
   let notifRes = await chrome.tabs.sendMessage(originalTabId, {
@@ -444,7 +449,9 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     data: {
       type: "warning",
       status: "success",
-      message: "Iniciando carga de registros...",
+      message: fullResync
+        ? "Iniciando resincronización completa..."
+        : "Iniciando carga de registros...",
       submessage:
         "Se está obteniendo información de pólizas, por favor espere...",
       interruptible: true,
@@ -521,6 +528,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     // otros cambios). El resto se omite: no vale la pena abrir su detalle.
     function motivo(item) {
       if (!dbEstatusMap.has(item.idPoliza)) return "alta (no existe en BD)";
+      if (fullResync) return "refresco (resincronizacion completa)";
       if (candidateSet.has(item.idPoliza)) return "refresco (proxima a vencer)";
       if (dbEstatusMap.get(item.idPoliza) !== item.estatus) {
         return `refresco (estatus BD="${dbEstatusMap.get(item.idPoliza)}" vs grilla="${item.estatus}")`;

@@ -17,6 +17,7 @@ const elements = {};
 
 function cacheElements() {
   elements.syncBtn = document.getElementById("load_data_button");
+  elements.fullResyncBtn = document.getElementById("full_resync_button");
   elements.regTotalCount = document.getElementById("reg_total_count");
   elements.regNoLoadedCount = document.getElementById("reg_no_loaded_count");
   elements.tagTotal = document.getElementById("tag__total");
@@ -55,6 +56,7 @@ export function setupManagementView(alert, changeView, page, tabId) {
 
   elements.logoutBtn.addEventListener("click", handleLogout);
   elements.syncBtn.addEventListener("click", handleSync);
+  elements.fullResyncBtn.addEventListener("click", handleFullResync);
   elements.reactivateBtn.addEventListener("click", () => {
     chrome.tabs.create({ url: `${FRONTEND_URL}/pricing` });
   });
@@ -78,6 +80,7 @@ export async function loadManagementUI(authRes) {
     elements.syncMessageLabel.style.display = "flex";
     elements.syncMessageLabel.innerText = "Esta ventana no es compatible";
     elements.syncBtn.style.display = "none";
+    elements.fullResyncBtn.style.display = "none";
     toggleViewDetails("empty");
     return;
   }
@@ -106,6 +109,7 @@ export async function loadManagementUI(authRes) {
     elements.syncMessageLabel.innerText =
       "La sesión activa en la extensión no coincide con la sesión de la página. Por favor, verifique que está utilizando la misma cuenta en ambos lugares.";
     elements.syncBtn.style.display = "none";
+    elements.fullResyncBtn.style.display = "none";
     toggleViewDetails("empty");
     return;
   }
@@ -119,6 +123,7 @@ export async function loadManagementUI(authRes) {
     elements.syncMessageLabel.innerText =
       "Necesitas una suscripción activa para sincronizar tu cartera de pólizas.";
     elements.syncBtn.style.display = "none";
+    elements.fullResyncBtn.style.display = "none";
     elements.reactivateBtn.style.display = "block";
     toggleViewDetails("empty");
   }
@@ -233,6 +238,40 @@ async function handleSyncAll(tab) {
   );
 }
 
+// Recorre TODAS las polizas de todas las paginas y sobrescribe sus datos
+// (alta para las nuevas, refresco completo para las existentes), sin el
+// filtro de la sincronizacion parcial. Pensado para corregir datos sin tener
+// que borrar la cartera en la BD; es mucho mas lento que "Actualizar
+// cartera" porque abre el detalle de cada poliza.
+async function handleFullResync(event) {
+  event.preventDefault();
+
+  const [tab] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
+
+  const total = elements.tagTotal.innerText || "todas las";
+  alertModal.show(
+    "Resincronización completa",
+    `Se abrirá el detalle de ${total} pólizas de tu cartera y se sobrescribirán sus datos con lo que muestra el portal. Puede tardar bastante; puedes interrumpirla desde la notificación. Desea continuar?`,
+    async () => {
+      try {
+        const res = await chrome.tabs.sendMessage(tab.id, {
+          action: "post-all",
+          tab: tab.id,
+          full: true,
+        });
+        if (!res.success) {
+          alertModal.show("Conflicto en la solicitud", res.message);
+        }
+      } catch (error) {
+        alertModal.show("Error", `Existe un error: ${error.message}`);
+      }
+    },
+  );
+}
+
 async function toggleViewDetails(submitType) {
   document.querySelectorAll("[data-submit-type]").forEach((el) => {
     el.style.display = "none";
@@ -268,6 +307,11 @@ async function toggleViewDetails(submitType) {
         // existente, no solo agregar lo nuevo.
         elements.syncBtn.innerText =
           inDbData.length > 0 ? "Actualizar cartera" : "Sincronizar registros";
+
+        // Resincronizar todo solo tiene sentido si ya hay cartera cargada;
+        // sin registros, "Sincronizar registros" ya recorre todo.
+        elements.fullResyncBtn.style.display =
+          inDbData.length > 0 ? "flex" : "none";
 
         const resViewDetailed = await chrome.tabs.sendMessage(currentTabId, {
           action: "get-all-in-view-detailed",
@@ -315,6 +359,7 @@ async function toggleViewDetails(submitType) {
 
         if (!sameSession.success) {
           elements.syncBtn.style.display = "none";
+          elements.fullResyncBtn.style.display = "none";
           throw new Error(
             "La sesión activa en la extensión no coincide con la sesión de la página.",
           );
