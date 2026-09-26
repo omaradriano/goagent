@@ -1,8 +1,13 @@
 import { createPortal } from "react-dom";
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useContext, useRef } from "react";
 import styled, { css } from "styled-components";
 import Icon from "./icon";
 import useBodyScrollLock from "../customHooks/useBodyScrollLock";
+import PolizaComentarios from "./polizaComentarios";
+import useConfirmDialog from "../customHooks/useConfirmDialog";
+import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
+import { Button as AnimatedButton } from "@/components/animate-ui/components/buttons/button";
+import { themedOutlineButton } from "@/lib/buttonStyles";
 import {
   CardTextTheme__CSS,
   CardTheme__CSS,
@@ -12,7 +17,6 @@ import {
   sectionTheme__css,
   textTheme__css,
 } from "../styles/CssComponents";
-import Button from "./button";
 import type { PolizaGetItem, StatusValues } from "../Types/types";
 import CounterCard from "./counterCard";
 import {
@@ -25,7 +29,6 @@ import { useNavigate } from "react-router";
 interface EditableFields {
   telefono: string;
   email: string;
-  comentario: string;
 }
 
 export interface ModalProps {
@@ -65,7 +68,6 @@ const Modal: React.FC<ModalProps> = ({
   const getInitialFields = () => ({
     telefono: polizaData.telefono ?? "",
     email: polizaData.email ?? "",
-    comentario: polizaData.comentario ?? "",
   });
 
   // Use a key to force remount and reset state when polizaData or modalOpen changes
@@ -79,6 +81,17 @@ const Modal: React.FC<ModalProps> = ({
   const isSubscribed = subscription?.isSubscribed ?? false;
   const navigate = useNavigate();
   useBodyScrollLock(modalOpen);
+  const { confirm, dialog } = useConfirmDialog();
+
+  // Los comentarios cambiaron con el modal abierto: al cerrarlo se recarga la
+  // lista una vez para actualizar el icono de comentario de la fila.
+  const comentariosChanged = useRef(false);
+  useEffect(() => {
+    if (!modalOpen && comentariosChanged.current) {
+      comentariosChanged.current = false;
+      dataChanged?.setDataHasChanged((prev) => prev + 1);
+    }
+  }, [modalOpen, dataChanged]);
 
   useEffect(() => {
     setEditFields(getInitialFields());
@@ -88,8 +101,7 @@ const Modal: React.FC<ModalProps> = ({
 
   const hasChanges =
     editFields.telefono !== (polizaData.telefono ?? "") ||
-    editFields.email !== (polizaData.email ?? "") ||
-    editFields.comentario !== (polizaData.comentario ?? "");
+    editFields.email !== (polizaData.email ?? "");
 
   const showSubscriptionAlert = () => {
     alertContext?.setAlertOptions({
@@ -102,13 +114,12 @@ const Modal: React.FC<ModalProps> = ({
   };
 
   const handleGuardar = () => {
-    alertContext?.setAlertOptions({
+    confirm({
       title: "Confirmar cambios",
-      message: `Se guardarán los cambios para la póliza ${polizaData.num_poliza}. ¿Desea continuar?`,
-      type: "success",
+      description: `Se guardarán los cambios para la póliza ${polizaData.num_poliza}. ¿Desea continuar?`,
+      confirmLabel: "Guardar",
       onConfirm: saveChanges,
     });
-    alertContext?.setShowAlert(true);
   };
 
   const saveChanges = async () => {
@@ -127,9 +138,6 @@ const Modal: React.FC<ModalProps> = ({
       }
       if (editFields.email !== (polizaData.email ?? "")) {
         body.email = editFields.email;
-      }
-      if (editFields.comentario !== (polizaData.comentario ?? "")) {
-        body.comentario = editFields.comentario;
       }
 
       const response = await fetch(
@@ -174,6 +182,7 @@ const Modal: React.FC<ModalProps> = ({
 
   return (
     <>
+      {dialog}
       {modalOpen &&
         createPortal(
           <ModalShadow onClick={() => setModalOpen(false)}>
@@ -483,21 +492,16 @@ const Modal: React.FC<ModalProps> = ({
 
                 <Divider />
 
-                {/* Comentario */}
+                {/* Bitacora de comentarios */}
                 <SectionGroup>
-                  <SectionLabel>Comentario</SectionLabel>
-                  <EditTextarea
-                    value={editFields.comentario}
-                    placeholder="Agregar comentario..."
-                    rows={3}
-                    readOnly={!isSubscribed}
-                    onChange={isSubscribed ? (e) =>
-                      setEditFields((prev) => ({
-                        ...prev,
-                        comentario: e.target.value,
-                      })) : undefined
-                    }
-                    onFocus={!isSubscribed ? showSubscriptionAlert : undefined}
+                  <SectionLabel>Comentarios</SectionLabel>
+                  <PolizaComentarios
+                    polizaUUID={polizaData.poliza_uuid}
+                    isSubscribed={isSubscribed}
+                    onSubscriptionRequired={showSubscriptionAlert}
+                    onChanged={() => {
+                      comentariosChanged.current = true;
+                    }}
                   />
                 </SectionGroup>
               </ModalBody>
@@ -505,14 +509,19 @@ const Modal: React.FC<ModalProps> = ({
               {/* FOOTER */}
               <ModalFooter>
                 {hasChanges && isSubscribed && (
-                  <Button
-                    action={handleGuardar}
-                    label="Guardar cambios"
-                    type="DefaultBlue"
-                    iconName="Save"
-                  />
+                  <AnimatedButton type="button" onClick={handleGuardar}>
+                    Guardar cambios
+                    <SaveRoundedIcon />
+                  </AnimatedButton>
                 )}
-                <Button action={() => setModalOpen(false)} label="Cerrar" />
+                <AnimatedButton
+                  type="button"
+                  variant="outline"
+                  className={themedOutlineButton}
+                  onClick={() => setModalOpen(false)}
+                >
+                  Cerrar
+                </AnimatedButton>
               </ModalFooter>
             </ModalContent>
           </ModalShadow>,
@@ -951,13 +960,6 @@ const EditInput = styled.input`
     -webkit-appearance: none;
     margin: 0;
   }
-`;
-
-const EditTextarea = styled.textarea`
-  ${editableBase}
-  resize: vertical;
-  min-height: 60px;
-  font-family: inherit;
 `;
 
 const EstatusDisplay = styled.div<{ $active: boolean }>`
