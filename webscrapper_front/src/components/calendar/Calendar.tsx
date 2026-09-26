@@ -27,6 +27,7 @@ import {
   DashboardTitle,
 } from "../dashboard";
 import useBodyScrollLock from "../../customHooks/useBodyScrollLock";
+import { parentescoLabel } from "../../functions/personasAdicionales";
 import {
   Accordion,
   AccordionItem,
@@ -55,6 +56,9 @@ interface CalendarEvent {
   allDay?: boolean;
   resource?: {
     numpoliza: string;
+    // "adicional": familiar no asegurado (polizas_personas_adicionales).
+    tipo: "asegurado" | "adicional";
+    parentesco?: string;
   };
 }
 
@@ -62,6 +66,8 @@ interface BirthdatePayload {
   nombrecompleto: string;
   birthdate: string;
   numpoliza: string;
+  tipo?: "asegurado" | "adicional";
+  parentesco?: string;
 }
 
 // Cuantos cumpleanos proximos se listan en el panel lateral (la lista hace
@@ -99,6 +105,8 @@ const daysLabel = (days: number): string =>
           : `En ${days} días`;
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+const isAdicional = (e: CalendarEvent) => e.resource?.tipo === "adicional";
 
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 const VIEW_LABELS: Partial<Record<View, string>> = {
@@ -175,7 +183,11 @@ const CalendarComp: React.FC = () => {
                 start: dateObj,
                 end: dateObj,
                 allDay: true,
-                resource: { numpoliza: item.numpoliza },
+                resource: {
+                  numpoliza: item.numpoliza,
+                  tipo: item.tipo ?? "asegurado",
+                  parentesco: item.parentesco,
+                },
               };
             },
           );
@@ -237,17 +249,21 @@ const CalendarComp: React.FC = () => {
     const days = daysUntil(e.start);
     return (
       <UpcomingRow
-        key={`${e.title}-${e.resource?.numpoliza}`}
+        key={`${e.resource?.tipo}-${e.title}-${e.resource?.numpoliza}`}
         $past={days < 0}
         onClick={() => openEvent(e)}
       >
-        <DateBadge>
+        <DateBadge $adicional={isAdicional(e)}>
           <span>{moment(e.start).format("D")}</span>
           <small>{moment(e.start).format("MMM").replace(".", "")}</small>
         </DateBadge>
         <RowInfo>
           <RowName>{e.title}</RowName>
-          <RowMeta>Póliza {e.resource?.numpoliza}</RowMeta>
+          <RowMeta>
+            {isAdicional(e)
+              ? `${parentescoLabel(e.resource?.parentesco)} · Póliza ${e.resource?.numpoliza}`
+              : `Póliza ${e.resource?.numpoliza}`}
+          </RowMeta>
         </RowInfo>
         <DaysPill $days={days}>{daysLabel(days)}</DaysPill>
       </UpcomingRow>
@@ -313,7 +329,10 @@ const CalendarComp: React.FC = () => {
                 onView={(newView) => setCurrentView(newView)}
                 onSelectEvent={(event) => setSelectedEvent(event)}
                 eventPropGetter={(event) => ({
-                  className: daysUntil(event.start) < 0 ? "is-past" : "",
+                  className: [
+                    isAdicional(event) ? "is-adicional" : "",
+                    daysUntil(event.start) < 0 ? "is-past" : "",
+                  ].join(" "),
                 })}
                 components={{
                   toolbar: CalendarToolbar,
@@ -406,6 +425,11 @@ const CalendarComp: React.FC = () => {
 
               <CardBody>
                 <EventName>{selectedEvent.title}</EventName>
+                {isAdicional(selectedEvent) && (
+                  <AdicionalNote>
+                    Persona adicional: no está asegurada en la póliza.
+                  </AdicionalNote>
+                )}
 
                 <DetailsList>
                   <DetailItem>
@@ -420,6 +444,14 @@ const CalendarComp: React.FC = () => {
                       {daysLabel(selectedDays)}
                     </DaysPill>
                   </DetailItem>
+                  {isAdicional(selectedEvent) && (
+                    <DetailItem>
+                      <DetailLabel>Parentesco</DetailLabel>
+                      <DetailValue>
+                        {parentescoLabel(selectedEvent.resource?.parentesco)}
+                      </DetailValue>
+                    </DetailItem>
+                  )}
                   <DetailItem>
                     <DetailLabel>Póliza</DetailLabel>
                     <DetailValue>{selectedEvent.resource?.numpoliza}</DetailValue>
@@ -699,6 +731,12 @@ const CalendarSurface = styled(Surface)`
       background-color: rgba(21, 93, 252, 0.18);
     }
 
+    /* Personas adicionales (no aseguradas) en violeta */
+    &.is-adicional {
+      background-color: var(--ga-violet-soft);
+      color: var(--ga-violet);
+    }
+
     /* Cumpleanos que ya pasaron: gris en lugar de azul */
     &.is-past {
       background-color: var(--ga-surface-soft);
@@ -880,7 +918,7 @@ const UpcomingRow = styled.button<{ $past: boolean }>`
   }
 `;
 
-const DateBadge = styled.div`
+const DateBadge = styled.div<{ $adicional: boolean }>`
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -896,7 +934,7 @@ const DateBadge = styled.div`
   span {
     font-size: 17px;
     font-weight: 700;
-    color: var(--ga-primary);
+    color: ${(p) => (p.$adicional ? "var(--ga-violet)" : "var(--ga-primary)")};
   }
 
   small {
@@ -1066,6 +1104,13 @@ const EventName = styled.h3`
   font-weight: 700;
   letter-spacing: -0.2px;
   line-height: 1.3;
+`;
+
+const AdicionalNote = styled.p`
+  margin-top: -6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ga-violet);
 `;
 
 // Filas en gris calido: etiqueta a la izquierda, valor a la derecha.

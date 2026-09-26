@@ -4,6 +4,7 @@ import styled, { css } from "styled-components";
 import Icon from "./icon";
 import useBodyScrollLock from "../customHooks/useBodyScrollLock";
 import PolizaComentarios from "./polizaComentarios";
+import PolizaPersonasAdicionales from "./polizaPersonasAdicionales";
 import useConfirmDialog from "../customHooks/useConfirmDialog";
 import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
 import { Button as AnimatedButton } from "@/components/animate-ui/components/buttons/button";
@@ -453,6 +454,18 @@ const Modal: React.FC<ModalProps> = ({
                       ))}
                     </DependientesGrid>
                   )}
+                </SectionGroup>
+
+                <Divider />
+
+                {/* Personas adicionales (no aseguradas) */}
+                <SectionGroup>
+                  <SectionLabel>Personas adicionales</SectionLabel>
+                  <PolizaPersonasAdicionales
+                    polizaUUID={polizaData.poliza_uuid}
+                    isSubscribed={isSubscribed}
+                    onSubscriptionRequired={showSubscriptionAlert}
+                  />
                 </SectionGroup>
 
                 <Divider />

@@ -17,6 +17,9 @@ const GlobalStyle = createGlobalStyle<{ $theme: PreferedScheme }>`
     --ga-green: ${(p) => (p.$theme === "Dark" ? "#68d391" : "#38a169")};
     --ga-red: ${(p) => (p.$theme === "Dark" ? "#fc8181" : "#e53e3e")};
     --ga-orange: ${(p) => (p.$theme === "Dark" ? "#f6ad55" : "#dd6b20")};
+    /* Personas adicionales (no aseguradas) en el calendario de cumpleanos */
+    --ga-violet: ${(p) => (p.$theme === "Dark" ? "#b794f4" : "#7c3aed")};
+    --ga-violet-soft: ${(p) => (p.$theme === "Dark" ? "rgba(183, 148, 244, 0.16)" : "rgba(124, 58, 237, 0.1)")};
     --ga-muted: ${(p) => (p.$theme === "Dark" ? "#94a3b8" : "#6b6b6b")};
     --ga-text: ${(p) => (p.$theme === "Dark" ? "#ffffff" : "#171717")};
     --ga-surface: ${(p) => (p.$theme === "Dark" ? "var(--bg-dark-header)" : "#ffffff")};
