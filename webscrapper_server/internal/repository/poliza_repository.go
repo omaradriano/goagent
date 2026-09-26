@@ -311,28 +311,50 @@ func (r *polizaRepository) GetAllNumPolizaEstatus(ctx context.Context, agenteID 
 	return results, err
 }
 
+// BirthdayPastDays es cuantos dias hacia atras se siguen mostrando los
+// cumpleanos que ya pasaron (el calendario los muestra como "Hace N dias").
+const BirthdayPastDays = 10
+
+// GetBirthdates devuelve un cumpleanos por asegurado: la ocurrencia que cae en
+// la ventana [hoy - BirthdayPastDays, un ano despues). Los anos se suman como
+// intervalo sobre la fecha de nacimiento, asi un 29 de febrero cae en 28 en
+// anos no bisiestos (MAKE_DATE fallaba y tumbaba toda la consulta). "Hoy" es
+// la fecha en hora de Mexico como date: con NOW() los cumpleanos de hoy ya
+// contaban como pasados, y la BD esta en GMT (despues de las 6 pm ya seria
+// manana). La fecha de nacimiento se deja en la zona de la sesion, que es como
+// se guarda.
 func (r *polizaRepository) GetBirthdates(ctx context.Context, agenteID int) ([]BirthdateResult, error) {
 	var results []BirthdateResult
 	err := r.db.WithContext(ctx).Raw(`
-		WITH birthday_calc AS (
-		    SELECT a.nombre_completo, a.birthday, p.numpoliza,
-		        MAKE_DATE(EXTRACT(YEAR FROM NOW())::int, EXTRACT(MONTH FROM birthday)::int, EXTRACT(DAY FROM birthday)::int)::timestamp AS has_current_year_birthday
+		WITH ventana AS (
+		    SELECT ((now() AT TIME ZONE 'America/Mexico_City')::date - ?::int) AS inicio
+		),
+		birthday_calc AS (
+		    SELECT a.nombre_completo, p.numpoliza, a.birthday::date AS nacimiento,
+		        (EXTRACT(YEAR FROM v.inicio) - EXTRACT(YEAR FROM a.birthday::date))::int AS anos,
+		        v.inicio
 		    FROM asegurados a
 		    JOIN polizas p ON p.poliza_id = a.poliza_id
-		    JOIN agentes ag ON ag.agente_id = p.agente_id
-		    WHERE ag.agente_id = ?
+		    CROSS JOIN ventana v
+		    WHERE p.agente_id = ? AND a.birthday IS NOT NULL
+		),
+		ocurrencias AS (
+		    SELECT nombre_completo, numpoliza, inicio,
+		        (nacimiento + make_interval(years => anos))::date AS en_ano_inicio,
+		        (nacimiento + make_interval(years => anos + 1))::date AS en_ano_siguiente
+		    FROM birthday_calc
 		),
 		distinct_birthdays AS (
 		    SELECT DISTINCT ON (nombre_completo)
 		        nombre_completo,
-		        CASE WHEN has_current_year_birthday < NOW() THEN has_current_year_birthday + INTERVAL '1 year' ELSE has_current_year_birthday END AS next_birthday,
+		        CASE WHEN en_ano_inicio < inicio THEN en_ano_siguiente ELSE en_ano_inicio END AS next_birthday,
 		        numpoliza
-		    FROM birthday_calc
+		    FROM ocurrencias
 		    ORDER BY nombre_completo, next_birthday ASC
 		)
-		SELECT nombre_completo, next_birthday, numpoliza as num_poliza
+		SELECT nombre_completo, to_char(next_birthday, 'YYYY-MM-DD') AS next_birthday, numpoliza AS num_poliza
 		FROM distinct_birthdays
-		ORDER BY next_birthday ASC`, agenteID).
+		ORDER BY next_birthday ASC`, BirthdayPastDays, agenteID).
 		Scan(&results).Error
 	return results, err
 }
