@@ -24,6 +24,16 @@ type BirthdateResult struct {
 	Parentesco string
 }
 
+type AnniversaryResult struct {
+	NumPoliza string
+	// Nombre del asegurado principal; vacio si la poliza no tiene asegurados.
+	Asegurado       string
+	FechaEmision    string
+	NextAnniversary string
+	// Cuantos anos cumple la poliza en NextAnniversary.
+	Anos int
+}
+
 type PolizaRepository interface {
 	FindByNumPoliza(ctx context.Context, numPoliza string, agenteID int) (*models.Poliza, error)
 	GetNumPolizasByAgenteUUID(ctx context.Context, uuid string) ([]string, error)
@@ -32,6 +42,7 @@ type PolizaRepository interface {
 	FindPolizaIDByNumPoliza(ctx context.Context, numPoliza string) (int, error)
 	GetPolizaWithAsegurados(ctx context.Context, numPoliza string, agenteID int) (*models.Poliza, error)
 	GetBirthdates(ctx context.Context, agenteID int) ([]BirthdateResult, error)
+	GetAnniversaries(ctx context.Context, agenteID int) ([]AnniversaryResult, error)
 	UpdatePolizaFields(ctx context.Context, numPoliza string, agenteID int, fields map[string]interface{}, auditRepo AuditRepository) error
 	UpdatePolizaFieldsByID(ctx context.Context, polizaID int, fields map[string]interface{}, changedBy int, auditRepo AuditRepository) error
 	UpsertNextPayment(ctx context.Context, polizaID int64, nextPayment time.Time) error
@@ -376,6 +387,56 @@ func (r *polizaRepository) GetBirthdates(ctx context.Context, agenteID int) ([]B
 		    tipo, parentesco
 		FROM distinct_birthdays
 		ORDER BY next_birthday ASC`, BirthdayPastDays, agenteID, agenteID).
+		Scan(&results).Error
+	return results, err
+}
+
+// AnniversaryPastDays es cuantos dias hacia atras se siguen mostrando los
+// aniversarios de poliza que ya pasaron (igual que en cumpleanos).
+const AnniversaryPastDays = 10
+
+// GetAnniversaries devuelve un aniversario por poliza (sin las anuladas): la
+// ocurrencia de la fecha de emision que cae en la ventana
+// [hoy - AnniversaryPastDays, un ano despues), con al menos un ano cumplido
+// (la emision misma no cuenta). Misma logica que GetBirthdates: los anos se
+// suman como intervalo (29 de febrero cae en 28) y "hoy" es la fecha en hora
+// de Mexico. La emision es timestamptz, asi que se pasa a hora de Mexico antes
+// de tomar la fecha. El asegurado mostrado es el principal; si ninguno esta
+// marcado, el primero registrado.
+func (r *polizaRepository) GetAnniversaries(ctx context.Context, agenteID int) ([]AnniversaryResult, error) {
+	var results []AnniversaryResult
+	err := r.db.WithContext(ctx).Raw(`
+		WITH ventana AS (
+		    SELECT ((now() AT TIME ZONE 'America/Mexico_City')::date - ?::int) AS inicio
+		),
+		emisiones AS (
+		    SELECT p.numpoliza,
+		        (p.fecha_emision AT TIME ZONE 'America/Mexico_City')::date AS emision,
+		        (SELECT a.nombre_completo FROM asegurados a
+		         WHERE a.poliza_id = p.poliza_id
+		         ORDER BY a.is_principal IS TRUE DESC, a.asegurado_id ASC
+		         LIMIT 1) AS asegurado
+		    FROM polizas p
+		    WHERE p.agente_id = ? AND p.estatus != 'Anulada'
+		),
+		calc AS (
+		    SELECT e.*, v.inicio,
+		        GREATEST((EXTRACT(YEAR FROM v.inicio) - EXTRACT(YEAR FROM e.emision))::int, 1) AS anos
+		    FROM emisiones e
+		    CROSS JOIN ventana v
+		),
+		ocurrencias AS (
+		    SELECT numpoliza, asegurado, emision, inicio, anos,
+		        (emision + make_interval(years => anos))::date AS en_ano_inicio,
+		        (emision + make_interval(years => anos + 1))::date AS en_ano_siguiente
+		    FROM calc
+		)
+		SELECT numpoliza AS num_poliza, COALESCE(asegurado, '') AS asegurado,
+		    to_char(emision, 'YYYY-MM-DD') AS fecha_emision,
+		    to_char(CASE WHEN en_ano_inicio < inicio THEN en_ano_siguiente ELSE en_ano_inicio END, 'YYYY-MM-DD') AS next_anniversary,
+		    CASE WHEN en_ano_inicio < inicio THEN anos + 1 ELSE anos END AS anos
+		FROM ocurrencias
+		ORDER BY next_anniversary ASC, numpoliza ASC`, AnniversaryPastDays, agenteID).
 		Scan(&results).Error
 	return results, err
 }

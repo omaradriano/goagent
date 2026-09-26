@@ -90,6 +90,9 @@ func NewRouter() http.Handler {
 
 			// Calendario de cumpleaños
 			r.Get("/polizas/birthdates", handlers.ApiGetBirthdates)
+
+			// Calendario de aniversarios de poliza
+			r.Get("/polizas/anniversaries", handlers.ApiGetAnniversaries)
 		})
 	})
 

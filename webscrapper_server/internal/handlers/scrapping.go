@@ -1008,6 +1008,39 @@ func ApiGetBirthdates(w http.ResponseWriter, r *http.Request) {
 	services.HandleResponseSuccessWithData(birthdates, w)
 }
 
+func ApiGetAnniversaries(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Methods", "GET")
+
+	userUUID, _ := r.Context().Value(middlewares.UserIDKey).(string)
+
+	agenteID, err := deps.AgenteRepo.FindIDByUUID(r.Context(), userUUID)
+	if err != nil {
+		services.Log.ErrorMessage(err.Error())
+		services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+		return
+	}
+
+	results, err := deps.PolizaRepo.GetAnniversaries(r.Context(), agenteID)
+	if err != nil {
+		services.Log.ErrorMessage(err.Error())
+		services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
+		return
+	}
+
+	anniversaries := make([]dto.PolizaAnniversary, 0, len(results))
+	for _, r := range results {
+		anniversaries = append(anniversaries, dto.PolizaAnniversary{
+			Numpoliza:    r.NumPoliza,
+			Asegurado:    r.Asegurado,
+			FechaEmision: r.FechaEmision,
+			Anniversary:  r.NextAnniversary,
+			Anos:         r.Anos,
+		})
+	}
+
+	services.HandleResponseSuccessWithData(anniversaries, w)
+}
+
 // ApiPutPoliza reconcilia por completo una poliza EXISTENTE contra un nuevo
 // scrape (candidatas por vencimiento o mismatches de estatus del flujo de
 // resync). Reutiliza dto.PostItem_Poliza como body, mismo shape que

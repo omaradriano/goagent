@@ -78,6 +78,14 @@ type AseguradoBirthdate struct {
 	Parentesco     string `json:"parentesco,omitempty"`
 }
 
+type PolizaAnniversary struct {
+	Numpoliza    string `json:"numpoliza"`
+	Asegurado    string `json:"asegurado"`
+	FechaEmision string `json:"fecha_emision"`
+	Anniversary  string `json:"anniversary"`
+	Anos         int    `json:"anos"`
+}
+
 type JWTClaims struct {
 	Email         string `json:"email"`
 	AgenteUUID    string `json:"agente_uuid"`
