@@ -1,5 +1,4 @@
-import React, { useContext } from "react";
-import { ThemeContext, type PreferedScheme } from "../Context/ContextConfig";
+import React from "react";
 import styled from "styled-components";
 import type { CardType } from "../Types/types";
 
@@ -11,92 +10,61 @@ export interface StatTagProps {
 }
 
 const StatCard: React.FC<StatTagProps> = ({ amount, title, type, filter = ()=>{} }) => {
-  const theme = useContext(ThemeContext);
-
   return (
-    <StatCardCustom
-      $type={type ?? "Warning"}
-      $themeMode={theme?.theme as PreferedScheme}
-      onClick={filter}
-    >
-      <p>{title}</p>
+    <StatCardCustom $type={type ?? "Warning"} onClick={filter}>
       <h3>{amount}</h3>
+      <p>{title}</p>
     </StatCardCustom>
   );
 };
 
-const StatCardCustom = styled.div<{
-  $type: CardType;
-  $themeMode: PreferedScheme;
-}>`
+// Estilo de la presentacion: tarjeta limpia con el numero grande en el color
+// de su estado y la etiqueta en gris debajo (paleta --ga-* en GlobalStyle).
+const numberColor = (type: CardType) =>
+  type === "Danger"
+    ? "var(--ga-red)"
+    : type === "Warning"
+      ? "var(--ga-orange)"
+      : type === "Success"
+        ? "var(--ga-green)"
+        : "var(--ga-primary)";
 
+const StatCardCustom = styled.div<{ $type: CardType }>`
   display: flex;
   flex-direction: column;
-  /* flex: 1; */
-  flex: 1 0 calc(33.333% - 11px);
-  justify-content: space-between;
-  align-items: flex-start;
-  height: 80px;
-  border-radius: 7px;
-  padding: 10px;
-
+  align-items: center;
+  justify-content: center;
+  flex: 1 0 calc(25% - 12px);
+  min-width: 150px;
+  gap: 4px;
+  padding: 20px;
+  border-radius: 12px;
+  text-align: center;
   cursor: pointer;
 
-  max-width: 280px;
-
-  background-color: ${(p) =>
-    p.$type === "Danger"
-      ? "var(--sc-danger-bg)"
-      : p.$type === "Warning"
-        ? "var(--sc-warning-bg)"
-        : p.$type === "Success"
-          ? "var(--sc-success-bg)"
-          : "var(--sc-default-bg)"};
-
-  color: ${(p) =>
-    p.$type === "Danger"
-      ? "var(--sc-danger-color)"
-      : p.$type === "Warning"
-        ? "var(--sc-warning-color)"
-        : p.$type === "Success"
-          ? "var(--sc-success-color)"
-          : "var(--sc-default-color)"};
-
-  border: 1px solid var(--sc-border-light);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
-
-  ${(p) =>
-    p.$themeMode === "Dark"
-      ? `
-    --sc-danger-bg: rgba(255,111,111,0.08);
-    --sc-warning-bg: rgba(252,222,123,0.06);
-    --sc-success-bg: rgba(115,249,126,0.06);
-    --sc-default-bg: #0b1220;
-
-    --sc-danger-color: #ffb4b4;
-    --sc-warning-color: #ffe6a8;
-    --sc-success-color: #bff0c9;
-    --sc-default-color: #e6eef8;
-
-    border: 1px solid var(--sc-border-dark);
-    box-shadow: 0 1px 2px rgba(0,0,0,0.6);
-  `
-  : ""}
+  background-color: var(--ga-surface);
+  border: 1px solid var(--ga-surface-border);
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 
   &:hover {
-    filter: brightness(1.2)
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(21, 93, 252, 0.1);
   }
 
   h3 {
     margin: 0;
-    font-size: 1.4rem;
-    line-height: 1;
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1.1;
+    color: ${(p) => numberColor(p.$type)};
   }
 
   p {
     margin: 0;
-    font-size: clamp(14px, 1.5vw, 1.2rem);
-    opacity: 0.9;
+    font-size: 14px;
+    color: var(--ga-muted);
   }
 `;
 

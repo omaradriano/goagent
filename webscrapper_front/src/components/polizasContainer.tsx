@@ -4,7 +4,6 @@ import styled from "styled-components";
 import { PolizasNoItems } from "./NoFunctional";
 import Icon from "./icon";
 import PolizaItem from "./polizaItem";
-import { headerTheme, textTheme__css } from "../styles/CssComponents";
 import Modal from "./modal";
 import useModalState from "../customHooks/useModalState";
 
@@ -93,7 +92,7 @@ const PolizasItems = styled.div`
   display: flex;
   flex-direction: column;
   width: 100%;
-  gap: 5px;
+  gap: 8px;
 `;
 
 const PolizasItemsHeader = styled.div`
@@ -107,7 +106,7 @@ const PolizasItemsHeader = styled.div`
   position: sticky;
   top: 0;
   z-index: 10;
-  background: #e3ebfd;
+  background: var(--ga-surface);
 
   & p {
     flex: 1;
@@ -115,13 +114,17 @@ const PolizasItemsHeader = styled.div`
     display: flex;
     align-items: center;
     justify-content: center;
-    ${textTheme__css}
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ga-muted);
   }
   & p:nth-child(2n) {
     /* background-color: gray; */
   }
 `;
 
+// Contenedor blanco con borde sutil (estilo de la presentacion); las filas
+// van en gris calido por dentro.
 const PolizasContainerCustom = styled.div`
   /* min-height: 400px; */
   height: fit-content;
@@ -129,9 +132,10 @@ const PolizasContainerCustom = styled.div`
   display: flex;
   align-items: center;
   flex-direction: column;
-  padding: 0px 0;
-  /* ${headerTheme} */
-  border-radius: 8px;
+  padding: 0 16px 16px;
+  background-color: var(--ga-surface);
+  border: 1.5px solid var(--ga-surface-border);
+  border-radius: 16px;
   height: calc(100vh - 500px);
   overflow-y: auto;
   /* padding: 40px 10px; */

@@ -18,7 +18,7 @@ const PageWrapper = styled.div`
   height: calc(100vh - 60px);
   background-color: #f2ede7;
   color: #1a1a1a;
-  font-family: "SN Pro", sans-serif;
+  font-family: "Space Grotesk", sans-serif;
   overflow-x: hidden;
   overflow-y: auto;
   scroll-snap-type: y proximity;

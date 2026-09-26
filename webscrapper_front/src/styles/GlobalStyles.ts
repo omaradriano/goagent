@@ -6,10 +6,27 @@ const GlobalStyle = createGlobalStyle<{ $theme: PreferedScheme }>`
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: "SN Pro", sans-serif;
+    font-family: "Space Grotesk", sans-serif;
   }
 
   :root {
+
+    /** PALETA GOAGENT (estilo de la presentacion): numeros de tarjetas,
+        pildoras de estatus y superficies suaves. Valores por tema. */
+    --ga-primary: ${(p) => (p.$theme === "Dark" ? "#6ea8fe" : "#155dfc")};
+    --ga-green: ${(p) => (p.$theme === "Dark" ? "#68d391" : "#38a169")};
+    --ga-red: ${(p) => (p.$theme === "Dark" ? "#fc8181" : "#e53e3e")};
+    --ga-orange: ${(p) => (p.$theme === "Dark" ? "#f6ad55" : "#dd6b20")};
+    --ga-muted: ${(p) => (p.$theme === "Dark" ? "#94a3b8" : "#6b6b6b")};
+    --ga-surface: ${(p) => (p.$theme === "Dark" ? "var(--bg-dark-header)" : "#ffffff")};
+    --ga-surface-soft: ${(p) => (p.$theme === "Dark" ? "rgba(255, 255, 255, 0.04)" : "#f7f7f5")};
+    --ga-surface-border: ${(p) => (p.$theme === "Dark" ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.08)")};
+    --ga-pill-success-bg: ${(p) => (p.$theme === "Dark" ? "rgba(56, 161, 105, 0.16)" : "#dcfce7")};
+    --ga-pill-success: ${(p) => (p.$theme === "Dark" ? "#68d391" : "#16a34a")};
+    --ga-pill-danger-bg: ${(p) => (p.$theme === "Dark" ? "rgba(229, 62, 62, 0.16)" : "#fef2f2")};
+    --ga-pill-danger: ${(p) => (p.$theme === "Dark" ? "#fc8181" : "#dc2626")};
+    --ga-pill-warning-bg: ${(p) => (p.$theme === "Dark" ? "rgba(221, 107, 32, 0.18)" : "#ffedd5")};
+    --ga-pill-warning: ${(p) => (p.$theme === "Dark" ? "#f6ad55" : "#c2410c")};
 
     /** HEADER COLORS */
     --bg-dark-header: #1d293d;

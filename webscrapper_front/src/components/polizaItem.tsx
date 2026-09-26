@@ -8,8 +8,6 @@ import {
   NormalText,
   TipoPolizaTextTheme__CSS,
   TipoPolizaTheme__CSS,
-  sectionBorderTheme__css,
-  sectionTheme__css,
   textTheme__css,
 } from "../styles/CssComponents";
 import Button from "./button";
@@ -65,7 +63,7 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
           <div>
             <MinorText>Producto:</MinorText>
             <NormalText>{data.tipo_seguro}</NormalText>
-            <MinorText>ASegurado principal:</MinorText>
+            <MinorText>Asegurado principal:</MinorText>
             <NormalText>{principal?.nombre}</NormalText>
           </div>
           <PolizaItemFooter>
@@ -141,14 +139,16 @@ const PolizaItemCustom = styled.div<{ $viewMode: viewMode }>`
   flex-direction: ${(p) => (p.$viewMode === "Mobile" ? "column" : "row")};
   align-items: ${(p) => (p.$viewMode === "Mobile" ? "" : "center")};
   text-align: ${(p) => (p.$viewMode === "Mobile" ? "" : "center")};
-  ${sectionTheme__css}
+  /* Fila en gris calido dentro del contenedor blanco (estilo de la
+     presentacion). */
+  background-color: var(--ga-surface-soft);
   border-radius: 8px;
-  /* height: 90px; */
-  padding: 8px 10px;
-  ${sectionBorderTheme__css}
+  padding: 12px 16px;
 
   & > p {
     flex: ${(p) => (p.$viewMode === "Mobile" ? "" : "1")};
+    font-size: 14px;
+    font-weight: 500;
     ${textTheme__css}
   }
 
@@ -174,9 +174,11 @@ const PolizaItemCustom = styled.div<{ $viewMode: viewMode }>`
 const PolizaItemHeader = styled.div`
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  height: 40px;
+  gap: 8px;
+  min-height: 40px;
   /* background-color: purple; */
 
   & > div {
@@ -203,6 +205,13 @@ const TipoPolizaBadgeSmall = styled.span<{ $type: PolizaGetItem["tipo_poliza"] }
   white-space: nowrap;
   ${TipoPolizaTheme__CSS}
   ${TipoPolizaTextTheme__CSS}
+  /* En modo claro el fondo por defecto casi no se distingue del gris calido
+     de la fila: se usa blanco con un borde sutil. */
+  ${(p) =>
+    p.$type === "TRADICIONAL" && p.theme.mode !== "Dark"
+      ? `background-color: var(--ga-surface);
+         box-shadow: inset 0 0 0 1px var(--ga-surface-border);`
+      : ""}
 `;
 
 export default PolizaItem;
