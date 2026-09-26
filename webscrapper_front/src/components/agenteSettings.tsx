@@ -4,7 +4,10 @@ import styled from "styled-components";
 import { useNavigate } from "react-router";
 import Icon from "./icon";
 import useBodyScrollLock from "../customHooks/useBodyScrollLock";
-import Button from "./button";
+import useConfirmDialog from "../customHooks/useConfirmDialog";
+import SaveRoundedIcon from "@mui/icons-material/SaveRounded";
+import { Button as AnimatedButton } from "@/components/animate-ui/components/buttons/button";
+import { themedOutlineButton } from "@/lib/buttonStyles";
 import {
   sectionBorderTheme__css,
   sectionTheme__css,
@@ -29,6 +32,7 @@ const AgenteSettings: React.FC<AgenteSettingsProps> = ({
   setModalOpen,
 }) => {
   useBodyScrollLock(modalOpen);
+  const { confirm, dialog } = useConfirmDialog();
   const auth = useContext(AuthContext);
   const alertContext = useContext(AlertContext);
   const dataChanged = useContext(DataChangedContext);
@@ -80,14 +84,13 @@ const AgenteSettings: React.FC<AgenteSettingsProps> = ({
     daysUntilAdvice !== initialValue;
 
   const handleGuardar = () => {
-    alertContext?.setAlertOptions({
+    confirm({
       title: "Confirmar cambios",
-      message:
+      description:
         "Se actualizará la ventana de días para las pólizas próximas a vencer. ¿Desea continuar?",
-      type: "success",
+      confirmLabel: "Guardar",
       onConfirm: saveChanges,
     });
-    alertContext?.setShowAlert(true);
   };
 
   const saveChanges = async () => {
@@ -146,6 +149,7 @@ const AgenteSettings: React.FC<AgenteSettingsProps> = ({
 
   return (
     <>
+      {dialog}
       {modalOpen &&
         createPortal(
           <ModalShadow onClick={() => setModalOpen(false)}>
@@ -184,14 +188,19 @@ const AgenteSettings: React.FC<AgenteSettingsProps> = ({
 
               <ModalFooter>
                 {hasChanges && (
-                  <Button
-                    action={handleGuardar}
-                    label="Guardar cambios"
-                    type="DefaultBlue"
-                    iconName="Save"
-                  />
+                  <AnimatedButton type="button" onClick={handleGuardar}>
+                    Guardar cambios
+                    <SaveRoundedIcon />
+                  </AnimatedButton>
                 )}
-                <Button action={() => setModalOpen(false)} label="Cerrar" />
+                <AnimatedButton
+                  type="button"
+                  variant="outline"
+                  className={themedOutlineButton}
+                  onClick={() => setModalOpen(false)}
+                >
+                  Cerrar
+                </AnimatedButton>
               </ModalFooter>
             </ModalContent>
           </ModalShadow>,

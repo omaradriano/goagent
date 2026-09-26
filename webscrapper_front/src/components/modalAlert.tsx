@@ -1,140 +1,78 @@
-import { createPortal } from "react-dom";
-import styled from "styled-components";
-import Icon from "./icon";
-import { sectionTheme__css, textTheme__css } from "../styles/CssComponents";
-import Button from "./button";
 import { useContext } from "react";
+import CheckCircleRoundedIcon from "@mui/icons-material/CheckCircleRounded";
+import ErrorRoundedIcon from "@mui/icons-material/ErrorRounded";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogTitle,
+} from "@/components/animate-ui/components/radix/alert-dialog";
+import {
+  AlertDialogContent,
+  AlertDialogOverlay,
+  AlertDialogPortal,
+} from "@/components/animate-ui/primitives/radix/alert-dialog";
+import { buttonVariants } from "@/components/animate-ui/components/buttons/button";
+import { themedOutlineButton } from "@/lib/buttonStyles";
 import { AlertContext } from "../Context/ContextConfig";
-import useBodyScrollLock from "../customHooks/useBodyScrollLock";
 
+// Aviso global de la app (AlertContext): mensajes de exito/error. Usa el
+// AlertDialog (Radix) de Animate UI como el resto de confirmaciones. Con
+// onConfirm muestra Cancelar + Aceptar; sin el, es informativo y solo muestra
+// Aceptar. Va encima del modal de detalle (z-index 1000) y debajo de
+// ConfirmDialog (1200).
 const Alert: React.FC = () => {
   const alert = useContext(AlertContext);
-  useBodyScrollLock(Boolean(alert?.showAlert));
+  if (!alert) return null;
+
+  const { showAlert, setShowAlert, alertOptions } = alert;
+  const isSuccess = alertOptions.type === "success";
+  const onConfirm = alertOptions.onConfirm;
 
   return (
-    <>
-      {alert?.showAlert &&
-        createPortal(
-          <ModalShadow>
-            <ModalContent>
-              <ModalHeader>
-                <h3>{alert?.alertOptions.title}</h3>
-                <Icon
-                  iconName="Clear"
-                  size={24}
-                  isButton={true}
-                  action={() => {
-                    alert.setShowAlert(false);
-                  }}
-                ></Icon>
-              </ModalHeader>
-              <ModalBody>
-                <AlertMessage>
-                  {alert.alertOptions.message}{" "}
-                  <Icon iconName="Warning" size={40} customColor="#ffff00" />
-                </AlertMessage>
-              </ModalBody>
-              <ModalFooter>
-                <Button
-                  action={() => {
-                    alert.setShowAlert(false);
-                    alert.setAlertOptions({
-                      message: "",
-                      title: "",
-                      type: "error",
-                    });
-                  }}
-                  label="Cancelar"
-                ></Button>
-                <Button
-                  action={() => {
-                    alert.setShowAlert(false);
-                    alert?.alertOptions?.onConfirm?.();
-                    alert.setAlertOptions({
-                      message: "",
-                      title: "",
-                      type: "error",
-                    });
-                  }}
-                  label="Aceptar"
-                ></Button>
-              </ModalFooter>
-            </ModalContent>
-          </ModalShadow>,
-          document.body,
-        )}
-    </>
+    <AlertDialog open={showAlert} onOpenChange={setShowAlert}>
+      <AlertDialogPortal>
+        <AlertDialogOverlay className="fixed inset-0 z-[1100] bg-black/50 backdrop-blur-[2px]" />
+        <AlertDialogContent className="fixed top-1/2 left-1/2 z-[1101] grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-[var(--ga-surface-border)] bg-[var(--ga-surface)] p-6 text-[var(--ga-text)] shadow-lg sm:max-w-md">
+          <div className="flex items-start gap-3">
+            <span
+              className={
+                isSuccess
+                  ? "flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--ga-pill-success-bg)] text-[var(--ga-pill-success)]"
+                  : "flex size-10 shrink-0 items-center justify-center rounded-full bg-[var(--ga-pill-danger-bg)] text-[var(--ga-pill-danger)]"
+              }
+            >
+              {isSuccess ? <CheckCircleRoundedIcon /> : <ErrorRoundedIcon />}
+            </span>
+            <div className="flex flex-col gap-1.5 pt-1">
+              <AlertDialogTitle>{alertOptions.title}</AlertDialogTitle>
+              <AlertDialogDescription className="text-[var(--ga-muted)]">
+                {alertOptions.message}
+              </AlertDialogDescription>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            {onConfirm && (
+              <AlertDialogCancel className={themedOutlineButton}>
+                Cancelar
+              </AlertDialogCancel>
+            )}
+            <AlertDialogAction
+              className={buttonVariants()}
+              onClick={() => {
+                // Radix cierra el dialogo; la accion corre despues.
+                onConfirm?.();
+              }}
+            >
+              Aceptar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialogPortal>
+    </AlertDialog>
   );
 };
-
-const AlertMessage = styled.div`
-  display: flex;
-  ${textTheme__css}
-  align-items: center;
-`;
-
-
-// Fija sobre la ventana (antes absolute al alto total de la pagina: en
-// paginas largas el aviso quedaba fuera de la vista) y sobre el header.
-const ModalShadow = styled.div`
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background-color: #04040454;
-  z-index: 1100;
-`;
-
-const ModalContent = styled.div`
-  display: flex;
-  flex-direction: column;
-
-  height: fit-content;
-  max-height: calc(100dvh - 32px);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  border-radius: 6px;
-  width: clamp(300px, 90%, 600px);
-  /* background-color: red; */
-  padding: 0 10px;
-  ${sectionTheme__css}
-
-  z-index: 100;
-`;
-
-const ModalHeader = styled.div`
-  height: 45px;
-  width: 100%;
-  /* padding: 10px; */
-  display: flex;
-  justify-content: space-between;
-  flex-direction: row;
-  align-items: center;
-  /* background-color: gray; */
-  border-bottom: 1px solid #ffffff1a;
-  ${textTheme__css}
-`;
-
-const ModalBody = styled.div`
-  height: fit-content;
-  width: 100%;
-  padding: 10px 0;
-  /* background-color: white; */
-`;
-
-const ModalFooter = styled.div`
-  border-top: 1px solid #ffffff1a;
-  padding: 10px 0;
-  height: fit-content;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-end;
-  width: 100%;
-  gap: 10px;
-  /* background-color: white; */
-`;
 
 export default Alert;

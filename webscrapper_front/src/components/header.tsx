@@ -2,6 +2,7 @@ import React, { useContext, useState, useEffect, useRef } from "react";
 import styled, { keyframes, css } from "styled-components";
 import headerlogo from "@/assets/react.svg";
 import Icon from "./icon";
+import useConfirmDialog from "../customHooks/useConfirmDialog";
 import {
   AuthContext,
   SubscriptionContext,
@@ -70,12 +71,18 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
     setProfileOpen(false);
   };
 
+  const { confirm, dialog } = useConfirmDialog();
+
   const handleCancelSubscription = () => {
-    alert?.setAlertOptions({
+    setProfileOpen(false);
+    setMenuOpen(false);
+    confirm({
       title: "Cancelar suscripción",
-      message:
+      description:
         "¿Estás seguro de que deseas cancelar tu suscripción? Perderás el acceso al finalizar el periodo actual.",
-      type: "error",
+      confirmLabel: "Cancelar suscripción",
+      cancelLabel: "Volver",
+      tone: "danger",
       onConfirm: async () => {
         const token = localStorage.getItem("session_jwt");
         const res = await fetch(
@@ -106,12 +113,16 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
             type: "success",
           });
           alert?.setShowAlert(true);
+        } else {
+          alert?.setAlertOptions({
+            title: "Error",
+            message: "No se pudo cancelar la suscripción. Inténtalo de nuevo.",
+            type: "error",
+          });
+          alert?.setShowAlert(true);
         }
       },
     });
-    alert?.setShowAlert(true);
-    setProfileOpen(false);
-    setMenuOpen(false);
   };
 
   const emailLabel = auth?.session?.email
@@ -120,6 +131,7 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
 
   return (
     <HeaderMain>
+      {dialog}
       {/* LOGO */}
       <LogoArea onClick={() => navigate("/home")}>
         <HeaderImg src={headerlogo} alt="Logo de app" />

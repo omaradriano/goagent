@@ -18,6 +18,7 @@ const GlobalStyle = createGlobalStyle<{ $theme: PreferedScheme }>`
     --ga-red: ${(p) => (p.$theme === "Dark" ? "#fc8181" : "#e53e3e")};
     --ga-orange: ${(p) => (p.$theme === "Dark" ? "#f6ad55" : "#dd6b20")};
     --ga-muted: ${(p) => (p.$theme === "Dark" ? "#94a3b8" : "#6b6b6b")};
+    --ga-text: ${(p) => (p.$theme === "Dark" ? "#ffffff" : "#171717")};
     --ga-surface: ${(p) => (p.$theme === "Dark" ? "var(--bg-dark-header)" : "#ffffff")};
     --ga-surface-soft: ${(p) => (p.$theme === "Dark" ? "rgba(255, 255, 255, 0.04)" : "#f7f7f5")};
     --ga-surface-border: ${(p) => (p.$theme === "Dark" ? "rgba(255, 255, 255, 0.06)" : "rgba(0, 0, 0, 0.08)")};
