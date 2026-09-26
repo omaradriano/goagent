@@ -43,6 +43,9 @@ func NewRouter() http.Handler {
 			r.Get("/scrapping/resync/candidates", handlers.ApiGetResyncCandidates)
 			r.Get("/scrapping/resync/estatus", handlers.ApiGetResyncEstatus)
 
+			// Bitacora de comentarios de poliza (lectura)
+			r.Get("/polizas/{polizaUUID}/comentarios", handlers.ApiGetPolizaComentarios)
+
 			// Audit (lectura)
 			r.Get("/audit/poliza/{polizaUUID}", handlers.ApiGetPolizaAudit)
 			r.Get("/audit/agente", handlers.ApiGetAgenteAudit)
@@ -69,6 +72,10 @@ func NewRouter() http.Handler {
 			// Modificación de polizas
 			r.Patch("/scrapping/poliza", handlers.ApiPatchPoliza)
 			r.Put("/scrapping/poliza", handlers.ApiPutPoliza)
+
+			// Bitacora de comentarios de poliza (escritura)
+			r.Post("/polizas/{polizaUUID}/comentarios", handlers.ApiPostPolizaComentario)
+			r.Delete("/polizas/{polizaUUID}/comentarios/{comentarioID}", handlers.ApiDeletePolizaComentario)
 
 			// Perfil del agente
 			r.Patch("/auth/profile", handlers.ApiPatchAgenteProfile)

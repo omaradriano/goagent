@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/lib/pq"
@@ -482,11 +483,19 @@ func ApiPatchPoliza(w http.ResponseWriter, r *http.Request) {
 		fields["estatus"] = est
 	}
 
+	// Compatibilidad con clientes previos a la bitacora: "comentario" ya no
+	// sobrescribe polizas.comentario, agrega una entrada a
+	// polizas_comentarios (vacio se ignora).
+	nuevoComentario := ""
 	if item.Comentario != nil {
-		fields["comentario"] = *item.Comentario
+		nuevoComentario = strings.TrimSpace(*item.Comentario)
+		if utf8.RuneCountInString(nuevoComentario) > maxComentarioLen {
+			services.HandleResponseError(http.StatusBadRequest, "El comentario no puede exceder 2000 caracteres", w)
+			return
+		}
 	}
 
-	if len(fields) == 0 {
+	if len(fields) == 0 && nuevoComentario == "" {
 		services.HandleResponseError(http.StatusBadRequest, "No se proporcionaron campos para actualizar", w)
 		return
 	}
@@ -498,10 +507,25 @@ func ApiPatchPoliza(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := deps.PolizaRepo.UpdatePolizaFields(r.Context(), item.NumPoliza, agenteID, fields, deps.AuditRepo); err != nil {
-		services.Log.ErrorMessage(err.Error())
-		services.HandleResponseError(http.StatusConflict, "Error actualizando póliza", w)
-		return
+	if len(fields) > 0 {
+		if err := deps.PolizaRepo.UpdatePolizaFields(r.Context(), item.NumPoliza, agenteID, fields, deps.AuditRepo); err != nil {
+			services.Log.ErrorMessage(err.Error())
+			services.HandleResponseError(http.StatusConflict, "Error actualizando póliza", w)
+			return
+		}
+	}
+
+	if nuevoComentario != "" {
+		poliza, err := deps.PolizaRepo.FindByNumPoliza(r.Context(), item.NumPoliza, agenteID)
+		if err != nil {
+			services.HandleResponseError(http.StatusNotFound, "Póliza no encontrada", w)
+			return
+		}
+		if _, err := deps.ComentarioRepo.Create(r.Context(), int64(poliza.PolizaID), agenteID, nuevoComentario); err != nil {
+			services.Log.ErrorMessage(err.Error())
+			services.HandleResponseError(http.StatusInternalServerError, "Error guardando el comentario", w)
+			return
+		}
 	}
 
 	services.HandleResponseSuccess(w)
@@ -575,7 +599,11 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 			COALESCE(p.addr_ciudad, 'No definido'), COALESCE(p.addr_colonia, 'No definido'),
 			COALESCE(p.addr_estado, 'No definido'), COALESCE(p.moneda, ''), COALESCE(p.pais, ''),
 			COALESCE(p.email, ''), COALESCE(p.telefono, ''), ppc.next_payment, p.poliza_id, p.tipo_poliza,
-			COALESCE(p.comentario, '')
+			COALESCE((
+				SELECT c.contenido FROM polizas_comentarios c
+				WHERE c.poliza_id = p.poliza_id AND c.deleted_at IS NULL
+				ORDER BY c.created_at DESC, c.comentario_id DESC LIMIT 1
+			), '')
 		FROM polizas p
 		JOIN polizas_payments_conf ppc ON p.poliza_id = ppc.poliza_id
 		JOIN agentes a ON p.agente_id = a.agente_id
@@ -802,7 +830,11 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 			ppc.next_payment, COALESCE(p.moneda, ''), COALESCE(p.pais, ''),
 			COALESCE(p.telefono, ''), COALESCE(p.email, ''), COALESCE(p.suma_asegurada, ''),
 			p.last_modified, p.poliza_uuid,
-			p.tipo_poliza, COALESCE(p.comentario, '')` + baseQuery
+			p.tipo_poliza, COALESCE((
+				SELECT c.contenido FROM polizas_comentarios c
+				WHERE c.poliza_id = p.poliza_id AND c.deleted_at IS NULL
+				ORDER BY c.created_at DESC, c.comentario_id DESC LIMIT 1
+			), '')` + baseQuery
 
 	orderBy := `ppc.next_payment ASC`
 	if recent {
