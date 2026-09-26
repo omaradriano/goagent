@@ -137,6 +137,10 @@ const PolizasContainerCustom = styled.div`
   border: 1.5px solid var(--ga-surface-border);
   border-radius: 16px;
   height: calc(100vh - 500px);
+  /* En ventanas bajas el calculo de arriba dejaba la lista en unas decenas
+     de pixeles (el encabezado sticky tapaba las filas); la pagina hace
+     scroll en su lugar. */
+  min-height: 360px;
   overflow-y: auto;
   /* padding: 40px 10px; */
   /* align-items: center; */

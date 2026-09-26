@@ -3,6 +3,7 @@ import { useState, useEffect, useContext } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router";
 import Icon from "./icon";
+import useBodyScrollLock from "../customHooks/useBodyScrollLock";
 import Button from "./button";
 import {
   sectionBorderTheme__css,
@@ -27,6 +28,7 @@ const AgenteSettings: React.FC<AgenteSettingsProps> = ({
   modalOpen,
   setModalOpen,
 }) => {
+  useBodyScrollLock(modalOpen);
   const auth = useContext(AuthContext);
   const alertContext = useContext(AlertContext);
   const dataChanged = useContext(DataChangedContext);
@@ -205,17 +207,24 @@ const ModalShadow = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Margen para que el modal nunca toque los bordes de la ventana. */
+  padding: 16px;
   background-color: rgba(4, 4, 4, 0.55);
   backdrop-filter: blur(3px);
-  z-index: 10;
+  /* Por encima del header (sticky, z-index 100) y sus menus (200): con 10 el
+     header tapaba la parte superior del modal en ventanas bajas. */
+  z-index: 1000;
 `;
 
 const ModalContent = styled.div`
   display: flex;
   flex-direction: column;
   width: clamp(300px, 92%, 420px);
+  /* Sin limite, en ventanas bajas se cortaba: scroll interno. */
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: 12px;
-  overflow: hidden;
   ${sectionTheme__css}
   ${sectionBorderTheme__css}
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.22);

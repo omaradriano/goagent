@@ -23,6 +23,7 @@ import {
   DashboardText,
   DashboardTitle,
 } from "../dashboard";
+import useBodyScrollLock from "../../customHooks/useBodyScrollLock";
 
 moment.locale("es");
 const localizer = momentLocalizer(moment);
@@ -51,6 +52,7 @@ const CalendarComp: React.FC = () => {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [currentView, setCurrentView] = useState<View>(Views.MONTH);
   const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  useBodyScrollLock(selectedEvent !== null);
 
   useEffect(() => {
     const fetchBirthdays = async () => {

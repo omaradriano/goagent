@@ -5,9 +5,11 @@ import { sectionTheme__css, textTheme__css } from "../styles/CssComponents";
 import Button from "./button";
 import { useContext } from "react";
 import { AlertContext } from "../Context/ContextConfig";
+import useBodyScrollLock from "../customHooks/useBodyScrollLock";
 
 const Alert: React.FC = () => {
   const alert = useContext(AlertContext);
+  useBodyScrollLock(Boolean(alert?.showAlert));
 
   return (
     <>
@@ -72,17 +74,17 @@ const AlertMessage = styled.div`
 `;
 
 
+// Fija sobre la ventana (antes absolute al alto total de la pagina: en
+// paginas largas el aviso quedaba fuera de la vista) y sobre el header.
 const ModalShadow = styled.div`
-  position: absolute;
-  top: 0;
-  left: 0;
+  position: fixed;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
   background-color: #04040454;
-  height: 100%;
-  width: 100%;
-  z-index: 100;
+  z-index: 1100;
 `;
 
 const ModalContent = styled.div`
@@ -90,8 +92,10 @@ const ModalContent = styled.div`
   flex-direction: column;
 
   height: fit-content;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-radius: 6px;
-  overflow: hidden;
   width: clamp(300px, 90%, 600px);
   /* background-color: red; */
   padding: 0 10px;

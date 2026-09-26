@@ -2,6 +2,7 @@ import { createPortal } from "react-dom";
 import { useState, useEffect, useContext } from "react";
 import styled, { css } from "styled-components";
 import Icon from "./icon";
+import useBodyScrollLock from "../customHooks/useBodyScrollLock";
 import {
   CardTextTheme__CSS,
   CardTheme__CSS,
@@ -77,6 +78,7 @@ const Modal: React.FC<ModalProps> = ({
   const subscription = useContext(SubscriptionContext);
   const isSubscribed = subscription?.isSubscribed ?? false;
   const navigate = useNavigate();
+  useBodyScrollLock(modalOpen);
 
   useEffect(() => {
     setEditFields(getInitialFields());
@@ -527,9 +529,13 @@ const ModalShadow = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Margen para que el modal nunca toque los bordes de la ventana. */
+  padding: 16px;
   background-color: rgba(4, 4, 4, 0.55);
   backdrop-filter: blur(3px);
-  z-index: 10;
+  /* Por encima del header (sticky, z-index 100) y sus menus (200): con 10 el
+     header tapaba la parte superior del modal en ventanas bajas. */
+  z-index: 1000;
 `;
 
 /* ─── Card ────────────────────────────────────────────────────── */
@@ -537,7 +543,8 @@ const ModalContent = styled.div`
   display: flex;
   flex-direction: column;
   width: clamp(320px, 92%, 620px);
-  max-height: 90vh;
+  /* Nunca mas alto que la ventana visible; el cuerpo hace scroll. */
+  max-height: min(90vh, calc(100dvh - 32px));
   border-radius: 12px;
   overflow: hidden;
   ${sectionTheme__css}
@@ -645,6 +652,8 @@ const CloseBtn = styled.button`
 const ModalBody = styled.div`
   flex: 1;
   overflow-y: auto;
+  /* Al llegar al final no le pasa el scroll a la pagina. */
+  overscroll-behavior: contain;
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -848,6 +857,7 @@ const PagosList = styled.div`
   gap: 4px;
   max-height: 160px;
   overflow-y: auto;
+  overscroll-behavior: contain;
 `;
 
 const PagoRow = styled.div`
