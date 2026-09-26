@@ -27,6 +27,12 @@ import {
   DashboardTitle,
 } from "../dashboard";
 import useBodyScrollLock from "../../customHooks/useBodyScrollLock";
+import {
+  Accordion,
+  AccordionItem,
+  AccordionTrigger,
+  AccordionContent,
+} from "@/components/animate-ui/components/radix/accordion";
 
 // Español definido aquí: el import de "moment/locale/es" lo empaqueta Vite
 // con otra instancia de moment y el calendario seguía en inglés.
@@ -58,11 +64,21 @@ interface BirthdatePayload {
   numpoliza: string;
 }
 
-// Cuantos cumpleanos se listan en el panel lateral.
-const UPCOMING_LIMIT = 8;
+// Cuantos cumpleanos proximos se listan en el panel lateral (la lista hace
+// scroll dentro de su seccion).
+const UPCOMING_LIMIT = 30;
 
-// El backend manda el proximo cumpleanos como timestamp en UTC; se toma solo
-// la parte de la fecha para que la zona horaria no lo mueva un dia.
+// Clases del accordion de Animate UI con la paleta --ga-*. Tailwind va sin
+// preflight, asi que el boton trae el fondo y borde nativos del navegador y
+// "border-b" no tiene estilo de borde: se quitan/fijan aqui.
+const ITEM_CLASS = "border-solid border-0 border-b border-[var(--ga-surface-border)]";
+const TRIGGER_CLASS =
+  "items-center px-1 py-3 bg-transparent border-0 hover:no-underline cursor-pointer [&>svg]:text-[var(--ga-muted)]";
+const CONTENT_CLASS = "pt-1 pb-3";
+
+// El backend manda un cumpleanos por asegurado (los proximos y los de los
+// ultimos dias) como YYYY-MM-DD; se arma la fecha local sin pasar por UTC para
+// que la zona horaria no la mueva un dia.
 const parseBirthdate = (raw: string): Date => {
   const [y, m, d] = raw.slice(0, 10).split("-").map(Number);
   return new Date(y, m - 1, d);
@@ -72,7 +88,15 @@ const daysUntil = (date: Date): number =>
   moment(date).startOf("day").diff(moment().startOf("day"), "days");
 
 const daysLabel = (days: number): string =>
-  days <= 0 ? "Hoy" : days === 1 ? "Mañana" : `En ${days} días`;
+  days < -1
+    ? `Hace ${-days} días`
+    : days === -1
+      ? "Ayer"
+      : days === 0
+        ? "Hoy"
+        : days === 1
+          ? "Mañana"
+          : `En ${days} días`;
 
 const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -175,6 +199,15 @@ const CalendarComp: React.FC = () => {
     [events],
   );
 
+  // Los que ya pasaron, del mas reciente al mas viejo.
+  const recent = useMemo(
+    () =>
+      events
+        .filter((e) => daysUntil(e.start) < 0)
+        .sort((a, b) => b.start.getTime() - a.start.getTime()),
+    [events],
+  );
+
   const stats = useMemo(() => {
     const now = moment();
     return {
@@ -198,6 +231,27 @@ const CalendarComp: React.FC = () => {
   const openEvent = (event: CalendarEvent) => {
     if (currentView === Views.MONTH) setCurrentDate(event.start);
     setSelectedEvent(event);
+  };
+
+  const renderRow = (e: CalendarEvent) => {
+    const days = daysUntil(e.start);
+    return (
+      <UpcomingRow
+        key={`${e.title}-${e.resource?.numpoliza}`}
+        $past={days < 0}
+        onClick={() => openEvent(e)}
+      >
+        <DateBadge>
+          <span>{moment(e.start).format("D")}</span>
+          <small>{moment(e.start).format("MMM").replace(".", "")}</small>
+        </DateBadge>
+        <RowInfo>
+          <RowName>{e.title}</RowName>
+          <RowMeta>Póliza {e.resource?.numpoliza}</RowMeta>
+        </RowInfo>
+        <DaysPill $days={days}>{daysLabel(days)}</DaysPill>
+      </UpcomingRow>
+    );
   };
 
   const selectedDays = selectedEvent ? daysUntil(selectedEvent.start) : 0;
@@ -258,6 +312,9 @@ const CalendarComp: React.FC = () => {
                 onNavigate={(newDate) => setCurrentDate(newDate)}
                 onView={(newView) => setCurrentView(newView)}
                 onSelectEvent={(event) => setSelectedEvent(event)}
+                eventPropGetter={(event) => ({
+                  className: daysUntil(event.start) < 0 ? "is-past" : "",
+                })}
                 components={{
                   toolbar: CalendarToolbar,
                   month: { event: BirthdayEvent },
@@ -284,38 +341,43 @@ const CalendarComp: React.FC = () => {
             </CalendarSurface>
 
             <Upcoming>
-              <UpcomingHeader>
-                <UpcomingTitle>Próximos cumpleaños</UpcomingTitle>
-                <UpcomingCount>{upcoming.length}</UpcomingCount>
-              </UpcomingHeader>
-
-              {upcoming.length === 0 ? (
+              {events.length === 0 ? (
                 <EmptyState>
                   <Icon iconName="CakeOutlined" size={36} customColor="var(--ga-muted)" />
                   <p>Aún no hay cumpleaños registrados.</p>
                 </EmptyState>
               ) : (
-                <UpcomingList>
-                  {upcoming.slice(0, UPCOMING_LIMIT).map((e) => {
-                    const days = daysUntil(e.start);
-                    return (
-                      <UpcomingRow
-                        key={`${e.title}-${e.resource?.numpoliza}`}
-                        onClick={() => openEvent(e)}
-                      >
-                        <DateBadge>
-                          <span>{moment(e.start).format("D")}</span>
-                          <small>{moment(e.start).format("MMM").replace(".", "")}</small>
-                        </DateBadge>
-                        <RowInfo>
-                          <RowName>{e.title}</RowName>
-                          <RowMeta>Póliza {e.resource?.numpoliza}</RowMeta>
-                        </RowInfo>
-                        <DaysPill $days={days}>{daysLabel(days)}</DaysPill>
-                      </UpcomingRow>
-                    );
-                  })}
-                </UpcomingList>
+                // Una seccion abierta a la vez y cada lista con su propio
+                // scroll: asi el panel no crece mas que el calendario.
+                <Accordion type="single" collapsible defaultValue="proximos">
+                  <AccordionItem value="proximos" className={ITEM_CLASS}>
+                    <AccordionTrigger className={TRIGGER_CLASS}>
+                      <SectionHeading>
+                        <UpcomingTitle>Próximos cumpleaños</UpcomingTitle>
+                        <UpcomingCount>{upcoming.length}</UpcomingCount>
+                      </SectionHeading>
+                    </AccordionTrigger>
+                    <AccordionContent className={CONTENT_CLASS}>
+                      <UpcomingList>
+                        {upcoming.slice(0, UPCOMING_LIMIT).map(renderRow)}
+                      </UpcomingList>
+                    </AccordionContent>
+                  </AccordionItem>
+
+                  {recent.length > 0 && (
+                    <AccordionItem value="recientes" className={ITEM_CLASS}>
+                      <AccordionTrigger className={TRIGGER_CLASS}>
+                        <SectionHeading>
+                          <UpcomingTitle>Recientes</UpcomingTitle>
+                          <UpcomingCount>{recent.length}</UpcomingCount>
+                        </SectionHeading>
+                      </AccordionTrigger>
+                      <AccordionContent className={CONTENT_CLASS}>
+                        <UpcomingList>{recent.map(renderRow)}</UpcomingList>
+                      </AccordionContent>
+                    </AccordionItem>
+                  )}
+                </Accordion>
               )}
             </Upcoming>
           </Layout>
@@ -637,6 +699,13 @@ const CalendarSurface = styled(Surface)`
       background-color: rgba(21, 93, 252, 0.18);
     }
 
+    /* Cumpleanos que ya pasaron: gris en lugar de azul */
+    &.is-past {
+      background-color: var(--ga-surface-soft);
+      color: var(--ga-muted);
+      box-shadow: inset 0 0 0 1px var(--ga-surface-border);
+    }
+
     &.rbc-selected {
       background-color: var(--ga-primary);
       color: #fff;
@@ -743,20 +812,18 @@ const CalendarSurface = styled(Surface)`
 
 // ── Panel de proximos cumpleanos ──────────────────────────────────────────────
 const Upcoming = styled(Surface)`
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-  gap: 12px;
+  padding: 4px 16px;
 `;
 
-const UpcomingHeader = styled.div`
+const SectionHeading = styled.span`
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px 4px 0;
+  gap: 8px;
+  flex: 1;
 `;
 
-const UpcomingTitle = styled.h3`
+const UpcomingTitle = styled.span`
   font-size: 15px;
   font-weight: 700;
   color: var(--ga-text);
@@ -775,11 +842,24 @@ const UpcomingList = styled.div`
   display: flex;
   flex-direction: column;
   gap: 8px;
+  max-height: 460px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  /* Espacio para que el hover (translateY) y la barra no corten las filas */
+  padding: 2px 4px 2px 0;
+
+  &::-webkit-scrollbar {
+    width: 4px;
+  }
+  &::-webkit-scrollbar-thumb {
+    border-radius: 4px;
+    background-color: rgba(128, 128, 128, 0.35);
+  }
 `;
 
 // Fila en gris calido dentro del contenedor blanco, como en la lista de
-// polizas.
-const UpcomingRow = styled.button`
+// polizas. Las de cumpleanos que ya pasaron van atenuadas.
+const UpcomingRow = styled.button<{ $past: boolean }>`
   display: flex;
   align-items: center;
   gap: 12px;
@@ -790,9 +870,11 @@ const UpcomingRow = styled.button`
   background-color: var(--ga-surface-soft);
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.15s, transform 0.15s;
+  opacity: ${(p) => (p.$past ? 0.7 : 1)};
+  transition: border-color 0.15s, transform 0.15s, opacity 0.15s;
 
   &:hover {
+    opacity: 1;
     border-color: rgba(21, 93, 252, 0.3);
     transform: translateY(-1px);
   }
@@ -847,9 +929,13 @@ const RowName = styled.span`
 const RowMeta = styled.span`
   font-size: 12px;
   color: var(--ga-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 `;
 
-// Hoy en verde, esta semana en naranja, el resto neutro.
+// Hoy en verde, esta semana en naranja, el resto (y los que ya pasaron)
+// neutro.
 const DaysPill = styled.span<{ $days: number }>`
   flex-shrink: 0;
   font-size: 11px;
@@ -858,19 +944,21 @@ const DaysPill = styled.span<{ $days: number }>`
   border-radius: 20px;
   white-space: nowrap;
   background-color: ${(p) =>
-    p.$days <= 0
+    p.$days === 0
       ? "var(--ga-pill-success-bg)"
-      : p.$days <= 7
+      : p.$days > 0 && p.$days <= 7
         ? "var(--ga-pill-warning-bg)"
         : "var(--ga-surface)"};
   color: ${(p) =>
-    p.$days <= 0
+    p.$days === 0
       ? "var(--ga-pill-success)"
-      : p.$days <= 7
+      : p.$days > 0 && p.$days <= 7
         ? "var(--ga-pill-warning)"
         : "var(--ga-muted)"};
   box-shadow: ${(p) =>
-    p.$days > 7 ? "inset 0 0 0 1px var(--ga-surface-border)" : "none"};
+    p.$days < 0 || p.$days > 7
+      ? "inset 0 0 0 1px var(--ga-surface-border)"
+      : "none"};
 `;
 
 const EmptyState = styled.div`
