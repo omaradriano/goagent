@@ -12,7 +12,6 @@ import {
   DashboardTitle,
 } from "../dashboard";
 import useBodyScrollLock from "../../customHooks/useBodyScrollLock";
-import { parentescoLabel } from "../../functions/personasAdicionales";
 import {
   Accordion,
   AccordionItem,
@@ -31,6 +30,7 @@ import {
   calendarFormats,
   calendarMessages,
   HeaderLeft,
+  InfoBanner,
   StatContainer,
   Layout,
   LoadingBox,
@@ -58,7 +58,6 @@ import {
   CloseBtn,
   CardBody,
   EventName,
-  AdicionalNote,
   DetailsList,
   DetailItem,
   DetailLabel,
@@ -66,74 +65,87 @@ import {
 } from "./calendarShared";
 import CalendarToolbar from "./CalendarToolbar";
 
-interface CalendarEvent {
+interface AnniversaryEvent {
+  // "numpoliza · asegurado": es lo que muestra la vista de lista.
   title: string;
   start: Date;
   end: Date;
   allDay?: boolean;
-  resource?: {
+  resource: {
     numpoliza: string;
-    // "adicional": familiar no asegurado (polizas_personas_adicionales).
-    tipo: "asegurado" | "adicional";
-    parentesco?: string;
+    asegurado: string;
+    emision: Date;
+    anos: number;
   };
 }
 
-interface BirthdatePayload {
-  nombrecompleto: string;
-  birthdate: string;
+interface AnniversaryPayload {
   numpoliza: string;
-  tipo?: "asegurado" | "adicional";
-  parentesco?: string;
+  asegurado: string;
+  fecha_emision: string;
+  anniversary: string;
+  anos: number;
 }
 
+const ANNIVERSARY_ICON = "EventRepeat";
 
-const isAdicional = (e: CalendarEvent) => e.resource?.tipo === "adicional";
+// Debe coincidir con AnniversaryPastDays del backend.
+const PAST_DAYS = 10;
 
-const BirthdayEvent: React.FC<EventProps<CalendarEvent>> = ({ event }) => (
+const anosLabel = (anos: number) => (anos === 1 ? "1 año" : `${anos} años`);
+
+const aseguradoLabel = (e: AnniversaryEvent) =>
+  e.resource.asegurado || "Sin asegurado principal";
+
+// En el mes solo el numero de poliza: un mismo asegurado puede tener varias
+// polizas emitidas el mismo dia.
+const AnniversaryChip: React.FC<EventProps<AnniversaryEvent>> = ({ event }) => (
   <EventChip title={event.title}>
-    <Icon iconName="CakeOutlined" size={12} customColor="currentColor" />
-    <span>{event.title}</span>
+    <Icon iconName={ANNIVERSARY_ICON} size={12} customColor="currentColor" />
+    <span>{event.resource.numpoliza}</span>
   </EventChip>
 );
 
-const CalendarComp: React.FC = () => {
+const AnniversaryCalendar: React.FC = () => {
   const auth = useContext(AuthContext);
 
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [events, setEvents] = useState<AnniversaryEvent[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [currentView, setCurrentView] = useState<View>(Views.MONTH);
   const [agendaLength, setAgendaLength] = useState<number>(30);
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<AnniversaryEvent | null>(null);
   useBodyScrollLock(selectedEvent !== null);
 
   useEffect(() => {
-    const fetchBirthdays = async () => {
+    const fetchAnniversaries = async () => {
       try {
         if (auth?.session == null) throw new Error("No existe sesión activa");
 
         const jwt = localStorage.getItem("session_jwt");
         const calendar_data = await fetch(
-          `${import.meta.env.VITE_API_SERVER_URL}/v1/polizas/birthdates`,
+          `${import.meta.env.VITE_API_SERVER_URL}/v1/polizas/anniversaries`,
           { headers: { Authorization: `Bearer ${jwt}` } },
         );
 
         const response = await calendar_data.json();
 
         if (response.success && response.payload) {
-          const formattedEvents: CalendarEvent[] = response.payload.map(
-            (item: BirthdatePayload) => {
-              const dateObj = parseDate(item.birthdate);
+          const formattedEvents: AnniversaryEvent[] = response.payload.map(
+            (item: AnniversaryPayload) => {
+              const dateObj = parseDate(item.anniversary);
               return {
-                title: item.nombrecompleto,
+                title: item.asegurado
+                  ? `${item.numpoliza} · ${item.asegurado}`
+                  : item.numpoliza,
                 start: dateObj,
                 end: dateObj,
                 allDay: true,
                 resource: {
                   numpoliza: item.numpoliza,
-                  tipo: item.tipo ?? "asegurado",
-                  parentesco: item.parentesco,
+                  asegurado: item.asegurado,
+                  emision: parseDate(item.fecha_emision),
+                  anos: item.anos,
                 },
               };
             },
@@ -141,13 +153,13 @@ const CalendarComp: React.FC = () => {
           setEvents(formattedEvents);
         }
       } catch (error) {
-        console.error("Error en la petición de cumpleaños:", error);
+        console.error("Error en la petición de aniversarios:", error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchBirthdays();
+    fetchAnniversaries();
   }, [auth?.session]);
 
   const upcoming = useMemo(
@@ -187,29 +199,27 @@ const CalendarComp: React.FC = () => {
     setCurrentDate(new Date());
   };
 
-  const openEvent = (event: CalendarEvent) => {
+  const openEvent = (event: AnniversaryEvent) => {
     if (currentView === Views.MONTH) setCurrentDate(event.start);
     setSelectedEvent(event);
   };
 
-  const renderRow = (e: CalendarEvent) => {
+  const renderRow = (e: AnniversaryEvent) => {
     const days = daysUntil(e.start);
     return (
       <UpcomingRow
-        key={`${e.resource?.tipo}-${e.title}-${e.resource?.numpoliza}`}
+        key={e.resource.numpoliza}
         $past={days < 0}
         onClick={() => openEvent(e)}
       >
-        <DateBadge $adicional={isAdicional(e)}>
+        <DateBadge $adicional={false}>
           <span>{moment(e.start).format("D")}</span>
           <small>{moment(e.start).format("MMM").replace(".", "")}</small>
         </DateBadge>
         <RowInfo>
-          <RowName>{e.title}</RowName>
+          <RowName>Póliza {e.resource.numpoliza}</RowName>
           <RowMeta>
-            {isAdicional(e)
-              ? `${parentescoLabel(e.resource?.parentesco)} · Póliza ${e.resource?.numpoliza}`
-              : `Póliza ${e.resource?.numpoliza}`}
+            {aseguradoLabel(e)} · {anosLabel(e.resource.anos)}
           </RowMeta>
         </RowInfo>
         <DaysPill $days={days}>{daysLabel(days)}</DaysPill>
@@ -219,14 +229,21 @@ const CalendarComp: React.FC = () => {
 
   const selectedDays = selectedEvent ? daysUntil(selectedEvent.start) : 0;
 
+  const windowStart = moment().subtract(PAST_DAYS, "days").format("D [de] MMMM [de] YYYY");
+  const windowEnd = moment()
+    .subtract(PAST_DAYS, "days")
+    .add(1, "year")
+    .subtract(1, "day")
+    .format("D [de] MMMM [de] YYYY");
+
   return (
     <>
       <DashboardContainer>
         <DashboardHeader>
           <HeaderLeft>
-            <DashboardTitle>Mi calendario</DashboardTitle>
+            <DashboardTitle>Aniversarios de pólizas</DashboardTitle>
             <DashboardText $theme="Light">
-              Descubre quién es el siguiente cumpleañero.
+              Consulta qué pólizas cumplen un año más desde su emisión.
             </DashboardText>
           </HeaderLeft>
         </DashboardHeader>
@@ -246,16 +263,28 @@ const CalendarComp: React.FC = () => {
           />
           <StatCard
             amount={stats.total}
-            title="Asegurados con cumpleaños"
+            title="Pólizas con aniversario"
             type="Default"
             filter={() => goToAgenda(365)}
           />
         </StatContainer>
 
+        {/* El backend manda solo el proximo aniversario de cada poliza: fuera
+            de esta ventana el calendario sale vacio. */}
+        <InfoBanner>
+          <Icon iconName="InfoOutlined" size={18} customColor="var(--ga-primary)" />
+          <span>
+            Se muestra solo el <strong>próximo aniversario</strong> de cada póliza,
+            del <strong>{windowStart}</strong> al <strong>{windowEnd}</strong>{" "}
+            (incluye los de los últimos {PAST_DAYS} días). Las pólizas anuladas no
+            aparecen.
+          </span>
+        </InfoBanner>
+
         {loading ? (
           <LoadingBox>
             <Spinner />
-            <p>Cargando calendario de cumpleaños...</p>
+            <p>Cargando calendario de aniversarios...</p>
           </LoadingBox>
         ) : (
           <Layout>
@@ -276,19 +305,16 @@ const CalendarComp: React.FC = () => {
                 onView={(newView) => setCurrentView(newView)}
                 onSelectEvent={(event) => setSelectedEvent(event)}
                 eventPropGetter={(event) => ({
-                  className: [
-                    isAdicional(event) ? "is-adicional" : "",
-                    daysUntil(event.start) < 0 ? "is-past" : "",
-                  ].join(" "),
+                  className: daysUntil(event.start) < 0 ? "is-past" : "",
                 })}
                 components={{
-                  toolbar: CalendarToolbar<CalendarEvent>,
-                  month: { event: BirthdayEvent },
+                  toolbar: CalendarToolbar<AnniversaryEvent>,
+                  month: { event: AnniversaryChip },
                 }}
                 formats={calendarFormats}
                 messages={calendarMessages(
-                  "Asegurado",
-                  "No hay cumpleaños en este periodo.",
+                  "Póliza",
+                  "No hay aniversarios de pólizas en este periodo.",
                 )}
               />
             </CalendarSurface>
@@ -296,17 +322,15 @@ const CalendarComp: React.FC = () => {
             <Upcoming>
               {events.length === 0 ? (
                 <EmptyState>
-                  <Icon iconName="CakeOutlined" size={36} customColor="var(--ga-muted)" />
-                  <p>Aún no hay cumpleaños registrados.</p>
+                  <Icon iconName={ANNIVERSARY_ICON} size={36} customColor="var(--ga-muted)" />
+                  <p>Aún no hay pólizas registradas.</p>
                 </EmptyState>
               ) : (
-                // Una seccion abierta a la vez y cada lista con su propio
-                // scroll: asi el panel no crece mas que el calendario.
                 <Accordion type="single" collapsible defaultValue="proximos">
                   <AccordionItem value="proximos" className={ITEM_CLASS}>
                     <AccordionTrigger className={TRIGGER_CLASS}>
                       <SectionHeading>
-                        <UpcomingTitle>Próximos cumpleaños</UpcomingTitle>
+                        <UpcomingTitle>Próximos aniversarios</UpcomingTitle>
                         <UpcomingCount>{upcoming.length}</UpcomingCount>
                       </SectionHeading>
                     </AccordionTrigger>
@@ -345,9 +369,9 @@ const CalendarComp: React.FC = () => {
               <CardHeader>
                 <CardHeaderLeft>
                   <EventIconBox>
-                    <Icon iconName="CakeOutlined" size={18} customColor="var(--ga-primary)" />
+                    <Icon iconName={ANNIVERSARY_ICON} size={18} customColor="var(--ga-primary)" />
                   </EventIconBox>
-                  <CardTitle>Cumpleaños</CardTitle>
+                  <CardTitle>Aniversario de póliza</CardTitle>
                 </CardHeaderLeft>
                 <CloseBtn
                   onClick={() => setSelectedEvent(null)}
@@ -358,14 +382,13 @@ const CalendarComp: React.FC = () => {
               </CardHeader>
 
               <CardBody>
-                <EventName>{selectedEvent.title}</EventName>
-                {isAdicional(selectedEvent) && (
-                  <AdicionalNote>
-                    Persona adicional: no está asegurada en la póliza.
-                  </AdicionalNote>
-                )}
+                <EventName>Póliza {selectedEvent.resource.numpoliza}</EventName>
 
                 <DetailsList>
+                  <DetailItem>
+                    <DetailLabel>Asegurado principal</DetailLabel>
+                    <DetailValue>{aseguradoLabel(selectedEvent)}</DetailValue>
+                  </DetailItem>
                   <DetailItem>
                     <DetailLabel>Fecha</DetailLabel>
                     <DetailValue>
@@ -378,17 +401,15 @@ const CalendarComp: React.FC = () => {
                       {daysLabel(selectedDays)}
                     </DaysPill>
                   </DetailItem>
-                  {isAdicional(selectedEvent) && (
-                    <DetailItem>
-                      <DetailLabel>Parentesco</DetailLabel>
-                      <DetailValue>
-                        {parentescoLabel(selectedEvent.resource?.parentesco)}
-                      </DetailValue>
-                    </DetailItem>
-                  )}
                   <DetailItem>
-                    <DetailLabel>Póliza</DetailLabel>
-                    <DetailValue>{selectedEvent.resource?.numpoliza}</DetailValue>
+                    <DetailLabel>Cumple</DetailLabel>
+                    <DetailValue>{anosLabel(selectedEvent.resource.anos)}</DetailValue>
+                  </DetailItem>
+                  <DetailItem>
+                    <DetailLabel>Emisión</DetailLabel>
+                    <DetailValue>
+                      {moment(selectedEvent.resource.emision).format("D [de] MMMM [de] YYYY")}
+                    </DetailValue>
                   </DetailItem>
                 </DetailsList>
               </CardBody>
@@ -400,4 +421,4 @@ const CalendarComp: React.FC = () => {
   );
 };
 
-export default CalendarComp;
+export default AnniversaryCalendar;

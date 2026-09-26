@@ -9,6 +9,7 @@ import AuthView from "./components/authview";
 import { Navigate, Route, Routes, useNavigate } from "react-router";
 import Home from "./components/home";
 import Calendar from "./components/calendar/Calendar";
+import AnniversaryCalendar from "./components/calendar/AnniversaryCalendar";
 import PrivacyPolicy from "./components/PrivacyPolicy";
 import Pricing from "./components/Pricing";
 import Support from "./components/Support";
@@ -38,6 +39,7 @@ function App() {
         <Route path="auth/emailsended" element={<AuthView mode="EmailSended"/>}></Route>
         <Route path="auth/verifiedaccount" element={<AuthView mode="Verified"/>}></Route>
         <Route path="calendar" element={<SubscriptionGuard><Calendar /></SubscriptionGuard>}></Route>
+        <Route path="calendar/anniversaries" element={<SubscriptionGuard><AnniversaryCalendar /></SubscriptionGuard>}></Route>
         <Route path="admin" element={<AdminGuard><AdminPanel /></AdminGuard>}></Route>
         <Route path="privacy" element={<PrivacyPolicy />}></Route>
         <Route path="pricing" element={<Pricing />}></Route>

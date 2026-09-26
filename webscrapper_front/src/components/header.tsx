@@ -36,10 +36,12 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
   const [docsOpen, setDocsOpen] = useState(false);
+  const [calendarsOpen, setCalendarsOpen] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
   const profileRef = useRef<HTMLDivElement>(null);
   const docsRef = useRef<HTMLDivElement>(null);
+  const calendarsRef = useRef<HTMLDivElement>(null);
 
   const isAuthenticated = auth?.session != null;
   const isSubscribed = subscription?.isSubscribed ?? false;
@@ -56,6 +58,9 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
       }
       if (docsRef.current && !docsRef.current.contains(e.target as Node)) {
         setDocsOpen(false);
+      }
+      if (calendarsRef.current && !calendarsRef.current.contains(e.target as Node)) {
+        setCalendarsOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -171,7 +176,34 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
         {isAuthenticated ? (
           <>
             <CustomNavLink to="/dashboard">Dashboard</CustomNavLink>
-            {isSubscribed && <CustomNavLink to="/calendar">Calendario</CustomNavLink>}
+            {isSubscribed && (
+              // Calendarios dropdown
+              <DocsWrapper ref={calendarsRef}>
+                <DocsBtn onClick={() => setCalendarsOpen((v) => !v)}>
+                  <Icon iconName="CalendarMonth" size={16} />
+                  <span>Calendarios</span>
+                  <Icon
+                    iconName={calendarsOpen ? "ExpandLess" : "ExpandMore"}
+                    size={14}
+                  />
+                </DocsBtn>
+                {calendarsOpen && (
+                  <DocsDropdown>
+                    <DocsNavLink to="/calendar" end onClick={() => setCalendarsOpen(false)}>
+                      <Icon iconName="CakeOutlined" size={16} />
+                      <span>Cumpleaños</span>
+                    </DocsNavLink>
+                    <DocsNavLink
+                      to="/calendar/anniversaries"
+                      onClick={() => setCalendarsOpen(false)}
+                    >
+                      <Icon iconName="EventRepeat" size={16} />
+                      <span>Aniversarios de pólizas</span>
+                    </DocsNavLink>
+                  </DocsDropdown>
+                )}
+              </DocsWrapper>
+            )}
             {isAdmin && <CustomNavLink to="/admin">Admin Panel</CustomNavLink>}
 
             <Divider />
@@ -341,10 +373,19 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
                   <span>Dashboard</span>
                 </DrawerLink>
                 {isSubscribed && (
-                  <DrawerLink to="/calendar" onClick={() => setMenuOpen(false)}>
-                    <Icon iconName="CalendarMonth" size={18} />
-                    <span>Calendario</span>
-                  </DrawerLink>
+                  <>
+                    <DrawerLink to="/calendar" end onClick={() => setMenuOpen(false)}>
+                      <Icon iconName="CakeOutlined" size={18} />
+                      <span>Cumpleaños</span>
+                    </DrawerLink>
+                    <DrawerLink
+                      to="/calendar/anniversaries"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <Icon iconName="EventRepeat" size={18} />
+                      <span>Aniversarios de pólizas</span>
+                    </DrawerLink>
+                  </>
                 )}
                 {isAdmin && (
                   <DrawerLink to="/admin" onClick={() => setMenuOpen(false)}>
@@ -524,7 +565,7 @@ const DocsDropdown = styled.div`
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
 `;
 
-const DocsLink = styled.a`
+const docsItem__css = css`
   display: flex;
   align-items: center;
   gap: 10px;
@@ -539,6 +580,18 @@ const DocsLink = styled.a`
   &:hover {
     background: ${(p) =>
       p.theme.mode === "Dark" ? "rgba(255,255,255,0.07)" : "rgba(0,0,0,0.05)"};
+  }
+`;
+
+const DocsLink = styled.a`
+  ${docsItem__css}
+`;
+
+const DocsNavLink = styled(NavLink)`
+  ${docsItem__css}
+
+  &.active {
+    color: #155dfc;
   }
 `;
 
