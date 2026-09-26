@@ -74,6 +74,8 @@ type AseguradoBirthdate struct {
 	NombreCompleto string `json:"nombrecompleto"`
 	Birthdate      string `json:"birthdate"`
 	Numpoliza      string `json:"numpoliza"`
+	Tipo           string `json:"tipo"`
+	Parentesco     string `json:"parentesco,omitempty"`
 }
 
 type JWTClaims struct {

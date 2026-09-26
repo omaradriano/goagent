@@ -1000,6 +1000,8 @@ func ApiGetBirthdates(w http.ResponseWriter, r *http.Request) {
 			NombreCompleto: r.NombreCompleto,
 			Birthdate:      r.NextBirthday,
 			Numpoliza:      r.NumPoliza,
+			Tipo:           r.Tipo,
+			Parentesco:     r.Parentesco,
 		})
 	}
 

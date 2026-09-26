@@ -46,6 +46,9 @@ func NewRouter() http.Handler {
 			// Bitacora de comentarios de poliza (lectura)
 			r.Get("/polizas/{polizaUUID}/comentarios", handlers.ApiGetPolizaComentarios)
 
+			// Personas adicionales (no aseguradas) de poliza (lectura)
+			r.Get("/polizas/{polizaUUID}/personas-adicionales", handlers.ApiGetPolizaPersonasAdicionales)
+
 			// Audit (lectura)
 			r.Get("/audit/poliza/{polizaUUID}", handlers.ApiGetPolizaAudit)
 			r.Get("/audit/agente", handlers.ApiGetAgenteAudit)
@@ -76,6 +79,11 @@ func NewRouter() http.Handler {
 			// Bitacora de comentarios de poliza (escritura)
 			r.Post("/polizas/{polizaUUID}/comentarios", handlers.ApiPostPolizaComentario)
 			r.Delete("/polizas/{polizaUUID}/comentarios/{comentarioID}", handlers.ApiDeletePolizaComentario)
+
+			// Personas adicionales (no aseguradas) de poliza (escritura)
+			r.Post("/polizas/{polizaUUID}/personas-adicionales", handlers.ApiPostPolizaPersonaAdicional)
+			r.Put("/polizas/{polizaUUID}/personas-adicionales/{personaID}", handlers.ApiPutPolizaPersonaAdicional)
+			r.Delete("/polizas/{polizaUUID}/personas-adicionales/{personaID}", handlers.ApiDeletePolizaPersonaAdicional)
 
 			// Perfil del agente
 			r.Patch("/auth/profile", handlers.ApiPatchAgenteProfile)

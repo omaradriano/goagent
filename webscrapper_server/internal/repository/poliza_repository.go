@@ -18,6 +18,10 @@ type BirthdateResult struct {
 	NombreCompleto string
 	NextBirthday   string
 	NumPoliza      string
+	// "asegurado" o "adicional" (polizas_personas_adicionales).
+	Tipo string
+	// Solo para las personas adicionales; vacio en asegurados.
+	Parentesco string
 }
 
 type PolizaRepository interface {
@@ -315,7 +319,9 @@ func (r *polizaRepository) GetAllNumPolizaEstatus(ctx context.Context, agenteID 
 // cumpleanos que ya pasaron (el calendario los muestra como "Hace N dias").
 const BirthdayPastDays = 10
 
-// GetBirthdates devuelve un cumpleanos por asegurado: la ocurrencia que cae en
+// GetBirthdates devuelve un cumpleanos por asegurado y por persona adicional
+// (familiares no asegurados, cuyo ano guardado es fijo y no importa): la
+// ocurrencia que cae en
 // la ventana [hoy - BirthdayPastDays, un ano despues). Los anos se suman como
 // intervalo sobre la fecha de nacimiento, asi un 29 de febrero cae en 28 en
 // anos no bisiestos (MAKE_DATE fallaba y tumbaba toda la consulta). "Hoy" es
@@ -329,32 +335,47 @@ func (r *polizaRepository) GetBirthdates(ctx context.Context, agenteID int) ([]B
 		WITH ventana AS (
 		    SELECT ((now() AT TIME ZONE 'America/Mexico_City')::date - ?::int) AS inicio
 		),
-		birthday_calc AS (
+		personas AS (
 		    SELECT a.nombre_completo, p.numpoliza, a.birthday::date AS nacimiento,
-		        (EXTRACT(YEAR FROM v.inicio) - EXTRACT(YEAR FROM a.birthday::date))::int AS anos,
-		        v.inicio
+		        'asegurado' AS tipo, '' AS parentesco
 		    FROM asegurados a
 		    JOIN polizas p ON p.poliza_id = a.poliza_id
-		    CROSS JOIN ventana v
 		    WHERE p.agente_id = ? AND a.birthday IS NOT NULL
+		    UNION ALL
+		    SELECT pa.nombre_completo, p.numpoliza, pa.birthday,
+		        'adicional' AS tipo, pa.parentesco
+		    FROM polizas_personas_adicionales pa
+		    JOIN polizas p ON p.poliza_id = pa.poliza_id
+		    WHERE p.agente_id = ?
+		),
+		birthday_calc AS (
+		    SELECT pe.*,
+		        (EXTRACT(YEAR FROM v.inicio) - EXTRACT(YEAR FROM pe.nacimiento))::int AS anos,
+		        v.inicio
+		    FROM personas pe
+		    CROSS JOIN ventana v
 		),
 		ocurrencias AS (
-		    SELECT nombre_completo, numpoliza, inicio,
+		    SELECT nombre_completo, numpoliza, tipo, parentesco, inicio,
 		        (nacimiento + make_interval(years => anos))::date AS en_ano_inicio,
 		        (nacimiento + make_interval(years => anos + 1))::date AS en_ano_siguiente
 		    FROM birthday_calc
 		),
+		-- Una fila por persona: el mismo asegurado puede estar en varias polizas.
+		-- El tipo va en la llave para que un adicional con el mismo nombre que
+		-- un asegurado no lo oculte.
 		distinct_birthdays AS (
-		    SELECT DISTINCT ON (nombre_completo)
-		        nombre_completo,
+		    SELECT DISTINCT ON (tipo, nombre_completo)
+		        nombre_completo, tipo, parentesco,
 		        CASE WHEN en_ano_inicio < inicio THEN en_ano_siguiente ELSE en_ano_inicio END AS next_birthday,
 		        numpoliza
 		    FROM ocurrencias
-		    ORDER BY nombre_completo, next_birthday ASC
+		    ORDER BY tipo, nombre_completo, next_birthday ASC
 		)
-		SELECT nombre_completo, to_char(next_birthday, 'YYYY-MM-DD') AS next_birthday, numpoliza AS num_poliza
+		SELECT nombre_completo, to_char(next_birthday, 'YYYY-MM-DD') AS next_birthday, numpoliza AS num_poliza,
+		    tipo, parentesco
 		FROM distinct_birthdays
-		ORDER BY next_birthday ASC`, BirthdayPastDays, agenteID).
+		ORDER BY next_birthday ASC`, BirthdayPastDays, agenteID, agenteID).
 		Scan(&results).Error
 	return results, err
 }
