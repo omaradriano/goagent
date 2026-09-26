@@ -13,7 +13,7 @@
   --popover: #ffffff;
   --popover-foreground: #171717;
 
-  --primary: #0d6efd;
+  --primary: #155dfc;
   --primary-foreground: #ffffff;
   --secondary: #f0f0f0;
   --secondary-foreground: #171717;
@@ -35,10 +35,16 @@
   --warning: #f5ba09;
   --warning-foreground: #ffffff;
   --dev: #d97706;
+
+  /* Paleta de la presentacion de GoAgent */
+  --ga-green: #38a169;
+  --ga-red: #e53e3e;
+  --ga-orange: #dd6b20;
+  --surface-soft: #f7f7f5;
 }
 
 @theme inline {
-  --font-sans: "Roboto", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -71,6 +77,10 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-dev: var(--dev);
+  --color-ga-green: var(--ga-green);
+  --color-ga-red: var(--ga-red);
+  --color-ga-orange: var(--ga-orange);
+  --color-surface-soft: var(--surface-soft);
 }
 
 @layer base {

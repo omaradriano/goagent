@@ -399,43 +399,32 @@ export function ManagementView({
         </Button>
       </div>
 
-      <h1 className="px-2.5 text-[2em] font-bold">Mis polizas</h1>
+      <h1 className="px-2.5 text-[2em] font-bold">Mis pólizas</h1>
 
       <div className="flex items-center justify-around gap-2.5 p-2.5">
-        <StatTag title="Total" value={stats?.total} />
-        <StatTag title="Activas" value={stats?.activas} />
-        <StatTag title="Por vencer" value={stats?.por_vencer} />
+        <StatTag title="Total" value={stats?.total} tone="primary" />
+        <StatTag title="Activas" value={stats?.activas} tone="green" />
+        <StatTag title="Por vencer" value={stats?.por_vencer} tone="orange" />
       </div>
 
       {detailsView === "all" && (
         <DetailsBox title="Información en la vista actual">
-          <p>
-            Polizas en la vista:{" "}
-            <span className="font-bold">{allInfo.viewCount ?? ""}</span>
-          </p>
-          <p>
-            Polizas en la vista no registradas:{" "}
-            <span className="font-bold">{allInfo.notLoaded ?? "PENDIENTE"}</span>
-          </p>
+          <DetailRow label="Pólizas en la vista" value={allInfo.viewCount ?? "—"} />
+          <DetailRow
+            label="Pólizas en la vista no registradas"
+            value={allInfo.notLoaded ?? "Pendiente"}
+          />
         </DetailsBox>
       )}
 
       {detailsView === "unique" && uniqueInfo && (
-        <DetailsBox title="Detalles de la poliza actual">
-          <p>
-            Numero de poliza:{" "}
-            <span className="font-bold">{uniqueInfo.num_poliza}</span>
-          </p>
-          <p>
-            Siguiente pago:{" "}
-            <span className="font-bold">
-              {formatDateDisplay(new Date(uniqueInfo.next_payment))}
-            </span>
-          </p>
-          <p>
-            Forma de pago:{" "}
-            <span className="font-bold">{uniqueInfo.forma_pago}</span>
-          </p>
+        <DetailsBox title="Detalles de la póliza actual">
+          <DetailRow label="Número de póliza" value={uniqueInfo.num_poliza} />
+          <DetailRow
+            label="Siguiente pago"
+            value={formatDateDisplay(new Date(uniqueInfo.next_payment))}
+          />
+          <DetailRow label="Forma de pago" value={uniqueInfo.forma_pago} />
         </DetailsBox>
       )}
 
@@ -482,15 +471,35 @@ export function ManagementView({
   );
 }
 
-function StatTag({ title, value }: { title: string; value?: number }) {
+// Estilo de la presentacion de GoAgent: tarjeta limpia con el numero grande
+// en el color de su estado y la etiqueta en gris debajo.
+const statTones = {
+  primary: "text-primary",
+  green: "text-ga-green",
+  orange: "text-ga-orange",
+} as const;
+
+function StatTag({
+  title,
+  value,
+  tone,
+}: {
+  title: string;
+  value?: number;
+  tone: keyof typeof statTones;
+}) {
   return (
-    <div className="flex h-[100px] flex-1 flex-col items-center justify-center gap-2.5 rounded-lg bg-accent p-2.5">
-      <h5 className="text-center text-sm font-bold text-[#605f5f]">{title}</h5>
-      <span className="text-[1.75rem] font-bold">{value ?? ""}</span>
+    <div className="flex flex-1 flex-col items-center justify-center gap-1 rounded-xl border bg-card px-3 py-4 text-center">
+      <span className={`text-[2rem] leading-tight font-bold ${statTones[tone]}`}>
+        {value ?? "—"}
+      </span>
+      <h5 className="text-sm text-muted-foreground">{title}</h5>
     </div>
   );
 }
 
+// Contenedor blanco con filas en gris calido (como la lista de polizas de
+// la presentacion).
 function DetailsBox({
   title,
   children,
@@ -499,9 +508,18 @@ function DetailsBox({
   children: ReactNode;
 }) {
   return (
-    <div className="mx-2.5 mb-2.5 flex flex-col rounded-[5px] bg-muted p-2.5">
-      <h3 className="mb-2.5 text-[1.2rem] font-bold">{title}</h3>
-      <div className="flex flex-col">{children}</div>
+    <div className="mx-2.5 mb-2.5 flex flex-col gap-2 rounded-2xl border bg-card p-3">
+      <h3 className="px-1 text-base font-semibold">{title}</h3>
+      <div className="flex flex-col gap-1.5">{children}</div>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg bg-surface-soft px-3 py-2.5">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <span className="text-sm font-semibold">{value}</span>
     </div>
   );
 }
