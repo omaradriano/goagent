@@ -26,6 +26,8 @@ export type PolizaGetItem = {
   poliza_uuid: string;
   tipo_poliza: PolizaTipoValues;
   comentario: string;
+  // Vacio si la poliza no se ha resincronizado desde que se guarda.
+  contratante?: string;
   flexible?: PolizaFlexible;
 };
 

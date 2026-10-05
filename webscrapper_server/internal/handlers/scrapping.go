@@ -102,7 +102,7 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	const colsPerItem = 20
+	const colsPerItem = 21
 	var placeholders []string
 	var args []any
 
@@ -124,13 +124,15 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 			item.NumPoliza, item.Plan, item.TipoSeguro, item.Direccion.Calle, item.Direccion.CodigoPostal,
 			item.Direccion.Ciudad, item.Direccion.Colonia, item.Direccion.Estado, item.Moneda,
 			item.Telefono, item.SumaAsegurada, item.Email, item.Pais, agenteID, tipoPoliza,
+			nonEmptyPtr(item.Contratante),
 		)
 	}
 
 	queryStart := `INSERT INTO polizas (
 		dia_cobro, estatus, fecha_emision, forma_pago, medio_cobro, numpoliza, plan,
 		tipo_seguro, addr_calle, addr_codigopostal, addr_ciudad, addr_colonia,
-		addr_estado, moneda, telefono, suma_asegurada, email, pais, agente_id, tipo_poliza
+		addr_estado, moneda, telefono, suma_asegurada, email, pais, agente_id, tipo_poliza,
+		contratante
 	) VALUES `
 	finalQuery := queryStart + strings.Join(placeholders, ",") + " RETURNING poliza_id, numpoliza"
 
@@ -392,6 +394,7 @@ func ApiPostPoliza(w http.ResponseWriter, r *http.Request) {
 		Email:            &item.Email,
 		Pais:             &item.Pais,
 		TipoPoliza:       tipoPoliza,
+		Contratante:      nonEmptyPtr(item.Contratante),
 		AgenteID:         &aid,
 	}
 
@@ -599,6 +602,7 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 			COALESCE(p.addr_ciudad, 'No definido'), COALESCE(p.addr_colonia, 'No definido'),
 			COALESCE(p.addr_estado, 'No definido'), COALESCE(p.moneda, ''), COALESCE(p.pais, ''),
 			COALESCE(p.email, ''), COALESCE(p.telefono, ''), ppc.next_payment, p.poliza_id, p.tipo_poliza,
+			COALESCE(p.contratante, ''),
 			COALESCE((
 				SELECT c.contenido FROM polizas_comentarios c
 				WHERE c.poliza_id = p.poliza_id AND c.deleted_at IS NULL
@@ -614,7 +618,7 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 		&cobranza.Direccion.Calle, &cobranza.Direccion.CodigoPostal, &cobranza.Direccion.Ciudad,
 		&cobranza.Direccion.Colonia, &cobranza.Direccion.Estado, &cobranza.Moneda, &cobranza.Pais,
 		&cobranza.Email, &cobranza.Telefono, &cobranza.SiguientePago, &polizaID, &cobranza.TipoPoliza,
-		&cobranza.Comentario)
+		&cobranza.Contratante, &cobranza.Comentario)
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			services.HandleResponseError(http.StatusNotFound, "La poliza no está registrada", w)
@@ -758,10 +762,6 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 		JOIN agentes a ON p.agente_id = a.agente_id
 		JOIN polizas_payments_conf ppc ON ppc.poliza_id=p.poliza_id`
 
-	if nombreAsegurado != "" {
-		joinClause += ` JOIN asegurados a_filter ON a_filter.poliza_id = p.poliza_id AND a_filter.is_principal = true`
-	}
-
 	baseQuery := joinClause + ` WHERE a.agente_id=$1`
 
 	args := []any{filters.Agente_id}
@@ -801,9 +801,17 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Busca el nombre en el contratante o en cualquier asegurado de la poliza
+	// (no solo el principal), sin distinguir mayusculas ni acentos. EXISTS en
+	// lugar de JOIN para no duplicar la poliza si coinciden varios asegurados.
 	if nombreAsegurado != "" {
 		argCount++
-		baseQuery += fmt.Sprintf(` AND LOWER(a_filter.nombre_completo) LIKE LOWER($%d)`, argCount)
+		needle := normalizeNameSQL(fmt.Sprintf("$%d", argCount))
+		baseQuery += fmt.Sprintf(` AND (%s LIKE %s OR EXISTS (
+			SELECT 1 FROM asegurados a_filter
+			WHERE a_filter.poliza_id = p.poliza_id AND %s LIKE %s))`,
+			normalizeNameSQL("p.contratante"), needle,
+			normalizeNameSQL("a_filter.nombre_completo"), needle)
 		args = append(args, "%"+nombreAsegurado+"%")
 	}
 
@@ -834,7 +842,7 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 				SELECT c.contenido FROM polizas_comentarios c
 				WHERE c.poliza_id = p.poliza_id AND c.deleted_at IS NULL
 				ORDER BY c.created_at DESC, c.comentario_id DESC LIMIT 1
-			), '')` + baseQuery
+			), ''), COALESCE(p.contratante, '')` + baseQuery
 
 	orderBy := `ppc.next_payment ASC`
 	if recent {
@@ -863,7 +871,7 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 			&poliza.Plan, &poliza.TipoSeguro, &poliza.Direccion.Calle, &poliza.Direccion.CodigoPostal, &poliza.Direccion.Ciudad,
 			&poliza.Direccion.Colonia, &poliza.Direccion.Estado, &poliza.SiguientePago, &poliza.Moneda, &poliza.Pais,
 			&poliza.Telefono, &poliza.Email, &poliza.SumaAsegurada, &poliza.UltimaModificacion, &poliza.PolizaUUID,
-			&poliza.TipoPoliza, &poliza.Comentario,
+			&poliza.TipoPoliza, &poliza.Comentario, &poliza.Contratante,
 		)
 		if err != nil {
 			rows.Close()
@@ -1116,6 +1124,10 @@ func ApiPutPoliza(w http.ResponseWriter, r *http.Request) {
 		"pais":              item.Pais,
 		"tipo_poliza":       tipoPoliza,
 	}
+	// Si el scrape no trae contratante no se borra el que ya estaba guardado.
+	if c := strings.TrimSpace(item.Contratante); c != "" {
+		fields["contratante"] = c
+	}
 	if err := deps.PolizaRepo.UpdatePolizaFields(r.Context(), item.NumPoliza, agenteID, fields, deps.AuditRepo); err != nil {
 		services.Log.ErrorMessage(err.Error())
 		services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
@@ -1223,4 +1235,20 @@ func ApiGetResyncEstatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	services.HandleResponseSuccessWithData(map[string]any{"polizas": polizas}, w)
+}
+
+// normalizeNameSQL envuelve una expresion SQL para comparar nombres sin
+// distinguir mayusculas ni acentos ("Gómez" encuentra "GOMEZ"). Se usa
+// translate en lugar de la extension unaccent para no depender de ella.
+func normalizeNameSQL(expr string) string {
+	return fmt.Sprintf("translate(lower(%s), 'áéíóúüàèìòù', 'aeiouuaeiou')", expr)
+}
+
+// nonEmptyPtr devuelve nil para cadenas vacias (columna en NULL).
+func nonEmptyPtr(s string) *string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return nil
+	}
+	return &s
 }

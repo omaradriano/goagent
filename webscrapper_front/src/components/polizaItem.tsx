@@ -36,6 +36,12 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
 }) => {
   const principal =
     data.asegurados.find((a) => a.is_principal) ?? data.asegurados[0];
+  // El contratante solo se muestra cuando no es el mismo asegurado principal.
+  const contratante =
+    data.contratante &&
+    data.contratante.trim().toLowerCase() !== principal?.nombre?.trim().toLowerCase()
+      ? data.contratante
+      : null;
 
   // console.log(data);
   return (
@@ -65,6 +71,12 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
             <NormalText>{data.tipo_seguro}</NormalText>
             <MinorText>Asegurado principal:</MinorText>
             <NormalText>{principal?.nombre}</NormalText>
+            {contratante && (
+              <>
+                <MinorText>Contratante:</MinorText>
+                <NormalText>{contratante}</NormalText>
+              </>
+            )}
           </div>
           <PolizaItemFooter>
             <SpanCard title={data.estatus}></SpanCard>
@@ -86,7 +98,10 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
               {data.tipo_poliza === "FLEXIBLE" ? "Flexible" : "Tradicional"}
             </TipoPolizaBadgeSmall>
           </div>
-          <p>{principal?.nombre}</p>
+          <p>
+            {principal?.nombre}
+            {contratante && <ContratanteHint>Contratante: {contratante}</ContratanteHint>}
+          </p>
           <p>{data.tipo_seguro}</p>
           <div>
             <SpanCard title={data.estatus as StatusValues} />
@@ -212,6 +227,13 @@ const TipoPolizaBadgeSmall = styled.span<{ $type: PolizaGetItem["tipo_poliza"] }
       ? `background-color: var(--ga-surface);
          box-shadow: inset 0 0 0 1px var(--ga-surface-border);`
       : ""}
+`;
+
+const ContratanteHint = styled.span`
+  display: block;
+  margin-top: 2px;
+  font-size: 0.75rem;
+  opacity: 0.65;
 `;
 
 export default PolizaItem;

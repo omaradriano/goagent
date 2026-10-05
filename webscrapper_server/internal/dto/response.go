@@ -38,6 +38,9 @@ type GetItem_Poliza struct {
 
 	Comentario string `json:"comentario"`
 
+	// Vacio si la poliza aun no se resincroniza desde que se guarda.
+	Contratante string `json:"contratante"`
+
 	Flexible *GetItem_PolizaFlexible `json:"flexible,omitempty"`
 }
 

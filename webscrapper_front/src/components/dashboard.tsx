@@ -300,7 +300,7 @@ const Dashboard: React.FC = () => {
           searchValue={searchAseguradoValue}
           setSearchValue={setSearchAseguradoValue}
           filterKey="nombre_asegurado"
-          placeholder="Buscar asegurado..."
+          placeholder="Buscar asegurado o contratante..."
         />
 
         <FilterSelect

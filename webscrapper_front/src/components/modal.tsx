@@ -260,6 +260,12 @@ const Modal: React.FC<ModalProps> = ({
                   <SectionLabel>Plan y contrato</SectionLabel>
                   <FieldGrid>
                     <Field>
+                      <FieldLabel>Contratante</FieldLabel>
+                      <FieldValue>
+                        {polizaData.contratante || "Pendiente de resincronizar"}
+                      </FieldValue>
+                    </Field>
+                    <Field>
                       <FieldLabel>Plan</FieldLabel>
                       <FieldValue>{polizaData.plan}</FieldValue>
                     </Field>

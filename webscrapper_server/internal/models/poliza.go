@@ -31,6 +31,7 @@ type Poliza struct {
 	Pais             *string    `gorm:"column:pais;size:50" json:"pais"`
 	TipoPoliza       string     `gorm:"column:tipo_poliza;size:20;default:'TRADICIONAL'" json:"tipo_poliza"`
 	Comentario       *string    `gorm:"column:comentario" json:"comentario"`
+	Contratante      *string    `gorm:"column:contratante;size:150" json:"contratante"`
 	AgenteID         *int64     `gorm:"column:agente_id" json:"-"`
 
 	Agente            *Agente                  `gorm:"foreignKey:AgenteID" json:"agente,omitempty"`
