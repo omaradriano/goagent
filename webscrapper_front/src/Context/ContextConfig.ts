@@ -1,3 +1,4 @@
+import type { TrialState } from "../functions/trial";
 import { createContext } from "react";
 import type { AlertOptions } from "../customHooks/useModalAlert";
 import type { session_claims } from "../Types/types";
@@ -37,4 +38,6 @@ export const SubscriptionContext = createContext<{
   setPeriodEnd: React.Dispatch<React.SetStateAction<string | null>>;
   renewalDate: string | null;
   setRenewalDate: React.Dispatch<React.SetStateAction<string | null>>;
+  trial: TrialState;
+  setTrial: React.Dispatch<React.SetStateAction<TrialState>>;
 } | null>(null)

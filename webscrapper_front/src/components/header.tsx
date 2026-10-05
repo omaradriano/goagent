@@ -2,6 +2,7 @@ import React, { useContext, useState, useEffect, useRef } from "react";
 import styled, { keyframes, css } from "styled-components";
 import headerlogo from "@/assets/react.svg";
 import Icon from "./icon";
+import { trialDaysLabel } from "../functions/trial";
 import useConfirmDialog from "../customHooks/useConfirmDialog";
 import {
   AuthContext,
@@ -45,6 +46,8 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
 
   const isAuthenticated = auth?.session != null;
   const isSubscribed = subscription?.isSubscribed ?? false;
+  // En prueba gratis no hay suscripcion de Stripe que cancelar.
+  const isTrial = subscription?.trial.isTrial ?? false;
   const isAdmin = auth?.session?.agente_role === "admin";
 
   // Cerrar menús al hacer click fuera
@@ -253,7 +256,21 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
                   {/* Suscripción */}
                   <ProfileSubSection>
                     <ProfileInfoLabel>Suscripción</ProfileInfoLabel>
-                    {isSubscribed ? (
+                    {isTrial ? (
+                      <>
+                        <SubStatusRow>
+                          <SubStatusDot $active />
+                          <SubStatusText>
+                            Prueba gratis · {trialDaysLabel(subscription?.trial.daysLeft ?? 0)} restantes
+                          </SubStatusText>
+                        </SubStatusRow>
+                        {subscription?.trial.endsAt && (
+                          <SubDetailText>
+                            Termina el {subscription.trial.endsAt}
+                          </SubDetailText>
+                        )}
+                      </>
+                    ) : isSubscribed ? (
                       <>
                         <SubStatusRow>
                           <SubStatusDot $active />
@@ -291,7 +308,7 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
                   </ProfileItem>
 
                   {/* Cancelar suscripción (solo si activa y no cancelada ya) */}
-                  {isSubscribed && !subscription?.periodEnd && (
+                  {isSubscribed && !isTrial && !subscription?.periodEnd && (
                     <CancelSubBtn onClick={handleCancelSubscription}>
                       <Icon iconName="Cancel" size={16} customColor="#ef4444" />
                       <span>Cancelar suscripción</span>
@@ -404,7 +421,7 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
                   <span>Cambiar contraseña</span>
                 </DrawerLink>
 
-                {isSubscribed && (
+                {isSubscribed && !isTrial && !subscription?.periodEnd && (
                   <DrawerLogoutBtn onClick={handleCancelSubscription}>
                     <Icon iconName="Cancel" size={18} customColor="#ef4444" />
                     <span>Cancelar suscripción</span>

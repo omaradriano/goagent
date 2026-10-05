@@ -12,6 +12,13 @@ import type { DefaultTheme } from "styled-components/dist/types";
 import useModalAlert from "../customHooks/useModalAlert";
 import type { session_claims } from "../Types/types";
 import { useNavigate, useLocation } from "react-router"; // 💡 Agregamos useLocation
+import {
+  EMPTY_TRIAL,
+  formatUnixDate,
+  trialFromStatus,
+  type SubscriptionStatusPayload,
+  type TrialState,
+} from "../functions/trial";
 
 const ContextProvider = ({ children }: { children: React.ReactNode }) => {
   const [theme, setTheme] = useState(() => {
@@ -39,6 +46,7 @@ const ContextProvider = ({ children }: { children: React.ReactNode }) => {
   const [isSubscribed, setIsSubscribed] = useState<boolean>(false);
   const [periodEnd, setPeriodEnd] = useState<string | null>(null);
   const [renewalDate, setRenewalDate] = useState<string | null>(null);
+  const [trial, setTrial] = useState<TrialState>(EMPTY_TRIAL);
 
   // 💡 Estado para saber si ya terminamos de validar la sesión y no renderizar a ciegas
   const [loading, setLoading] = useState(true);
@@ -126,18 +134,12 @@ const ContextProvider = ({ children }: { children: React.ReactNode }) => {
           if (sub_req.ok) {
             const sub_data: {
               success: boolean;
-              payload: {
-                is_subscribed: boolean;
-                cancel_at_period_end?: boolean;
-                current_period_end?: number;
-              };
+              payload: SubscriptionStatusPayload;
             } = await sub_req.json();
             setIsSubscribed(sub_data.payload?.is_subscribed ?? false);
+            setTrial(sub_data.payload ? trialFromStatus(sub_data.payload) : EMPTY_TRIAL);
             if (sub_data.payload?.current_period_end) {
-              const formattedDate = new Date(sub_data.payload.current_period_end * 1000).toLocaleDateString(
-                "es-MX",
-                { day: "numeric", month: "long", year: "numeric" },
-              );
+              const formattedDate = formatUnixDate(sub_data.payload.current_period_end);
               setRenewalDate(formattedDate);
               if (sub_data.payload?.cancel_at_period_end) {
                 setPeriodEnd(formattedDate);
@@ -171,7 +173,7 @@ const ContextProvider = ({ children }: { children: React.ReactNode }) => {
     >
       <ThemeContext.Provider value={{ theme, setTheme }}>
         <DataChangedContext.Provider value={{ dataHasChanged, setDataHasChanged }}>
-          <SubscriptionContext.Provider value={{ isSubscribed, setIsSubscribed, periodEnd, setPeriodEnd, renewalDate, setRenewalDate }}>
+          <SubscriptionContext.Provider value={{ isSubscribed, setIsSubscribed, periodEnd, setPeriodEnd, renewalDate, setRenewalDate, trial, setTrial }}>
             <ThemeProvider theme={themeValues as DefaultTheme}>
               <UserModeContext.Provider value={"Admin"}>
                 <AlertContext.Provider

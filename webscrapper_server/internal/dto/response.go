@@ -112,9 +112,17 @@ type Verify_Password_Response struct {
 }
 
 type SubscriptionStatusPayload struct {
+	// Acceso efectivo (suscripcion pagada o prueba gratis vigente): la
+	// extension y el frontend solo revisan este campo para habilitar funciones.
 	IsSubscribed      bool  `json:"is_subscribed"`
 	CancelAtPeriodEnd bool  `json:"cancel_at_period_end"`
 	CurrentPeriodEnd  int64 `json:"current_period_end"`
+	// Prueba gratis vigente y sin suscripcion pagada.
+	IsTrial bool `json:"is_trial"`
+	// Fin de la prueba (unix, segundos); 0 si nunca la ha usado.
+	TrialEndsAt int64 `json:"trial_ends_at"`
+	// Puede iniciar su prueba (nunca la ha usado y no paga).
+	TrialAvailable bool `json:"trial_available"`
 }
 
 type PolizasUserDetails struct {

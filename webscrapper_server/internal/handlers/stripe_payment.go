@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/omaradriano/cobranzawebscrapper_server/env"
 	"github.com/omaradriano/cobranzawebscrapper_server/internal/dto"
 	"github.com/omaradriano/cobranzawebscrapper_server/internal/middlewares"
+	"github.com/omaradriano/cobranzawebscrapper_server/internal/models"
 	"github.com/omaradriano/cobranzawebscrapper_server/internal/services"
 	"github.com/stripe/stripe-go/v74"
 	"github.com/stripe/stripe-go/v74/checkout/session"
@@ -70,6 +72,13 @@ func CreateStripeCheckoutSession(w http.ResponseWriter, r *http.Request) {
 				"agente_uuid": agente_uuid,
 			},
 		},
+	}
+
+	// Si se suscribe durante su prueba gratis, Stripe no cobra hasta que se le
+	// acaben los dias que le quedan. Stripe exige que trial_end este al menos
+	// 48 h en el futuro; con menos tiempo se cobra de inmediato.
+	if agente.TrialActive(time.Now()) && time.Until(*agente.TrialEndsAt) > 48*time.Hour {
+		params.SubscriptionData.TrialEnd = stripe.Int64(agente.TrialEndsAt.Unix())
 	}
 
 	params.AddMetadata("agente_uuid", agente_uuid)
@@ -350,13 +359,56 @@ func ApiGetSubscriptionStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	services.HandleResponseSuccessWithData(subscriptionStatusPayload(agente), w)
+}
+
+func subscriptionStatusPayload(agente *models.Agente) dto.SubscriptionStatusPayload {
+	now := time.Now()
 	payload := dto.SubscriptionStatusPayload{
-		IsSubscribed:      agente.IsSubscribed,
+		IsSubscribed:      agente.HasAccess(now),
 		CancelAtPeriodEnd: agente.CancelAtPeriodEnd,
 		CurrentPeriodEnd:  agente.CurrentPeriodEnd,
+		IsTrial:           !agente.IsSubscribed && agente.TrialActive(now),
+		TrialAvailable:    !agente.IsSubscribed && agente.TrialEndsAt == nil,
+	}
+	if agente.TrialEndsAt != nil {
+		payload.TrialEndsAt = agente.TrialEndsAt.Unix()
+	}
+	return payload
+}
+
+// ApiStartTrial activa la prueba gratis de models.TrialDays dias, sin tarjeta
+// y una sola vez por agente. Devuelve el estado de suscripcion actualizado.
+func ApiStartTrial(w http.ResponseWriter, r *http.Request) {
+	agente_uuid, _ := r.Context().Value(middlewares.UserIDKey).(string)
+	if agente_uuid == "" {
+		services.HandleResponseError(http.StatusUnauthorized, "Usuario no autenticado", w)
+		return
 	}
 
-	services.HandleResponseSuccessWithData(payload, w)
+	started, err := deps.AgenteRepo.StartTrial(r.Context(), agente_uuid, models.TrialDays)
+	if err != nil {
+		services.Log.ErrorMessage("Error iniciando prueba gratis " + agente_uuid + ": " + err.Error())
+		services.HandleResponseError(http.StatusInternalServerError, "Error iniciando la prueba gratis", w)
+		return
+	}
+	if !started {
+		services.HandleResponseError(http.StatusConflict, "Ya usaste tu prueba gratis o cuentas con una suscripción activa", w)
+		return
+	}
+
+	agente, err := deps.AgenteRepo.GetSubscriptionStatus(r.Context(), agente_uuid)
+	if err != nil {
+		services.HandleResponseError(http.StatusInternalServerError, "Error consultando suscripción", w)
+		return
+	}
+
+	if aid, aErr := deps.AgenteRepo.FindIDByUUID(r.Context(), agente_uuid); aErr == nil && agente.TrialEndsAt != nil {
+		newVal := agente.TrialEndsAt.Format(time.RFC3339)
+		_ = deps.AuditRepo.LogAgenteChange(r.Context(), aid, "trial_ends_at", nil, &newVal, &aid, "api")
+	}
+
+	services.HandleResponseSuccessWithData(subscriptionStatusPayload(agente), w)
 }
 
 func ApiCancelSubscription(w http.ResponseWriter, r *http.Request) {

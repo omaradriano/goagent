@@ -21,6 +21,7 @@ import {
 import type { PolizaGetItem } from "../Types/types";
 import { useNavigate } from "react-router";
 import { SubscriptionContext } from "../Context/ContextConfig";
+import { TRIAL_DAYS, trialDaysLabel } from "../functions/trial";
 
 const Dashboard: React.FC = () => {
   const theme = useContext(ThemeContext);
@@ -29,6 +30,7 @@ const Dashboard: React.FC = () => {
   const subscription = useContext(SubscriptionContext);
   const navigate = useNavigate();
   const isSubscribed = subscription?.isSubscribed ?? false;
+  const trial = subscription?.trial;
 
   const [polizasData, setPolizasData] = useState<PolizaGetItem[]>([]);
   const [polizasChanged, setPolizasChanged] = useState<PolizaGetItem[]>([]);
@@ -152,8 +154,41 @@ const Dashboard: React.FC = () => {
 
   return (
     <DashboardContainer>
+      {/* Prueba gratis vigente: dias restantes */}
+      {trial?.isTrial && (
+        <SubscriptionBanner $info>
+          <BannerLeft>
+            <Icon iconName="CardGiftcard" size={20} customColor="#155dfc" />
+            <BannerText $info>
+              Estás en tu prueba gratis: te quedan {trialDaysLabel(trial.daysLeft)}
+              {trial.endsAt ? ` (termina el ${trial.endsAt})` : ""}. Suscríbete
+              para no perder el acceso.
+            </BannerText>
+          </BannerLeft>
+          <BannerAction $info onClick={() => navigate("/pricing")}>
+            Suscribirme
+          </BannerAction>
+        </SubscriptionBanner>
+      )}
+
+      {/* Sin acceso pero con la prueba gratis disponible */}
+      {!isSubscribed && trial?.available && (
+        <SubscriptionBanner $info>
+          <BannerLeft>
+            <Icon iconName="CardGiftcard" size={20} customColor="#155dfc" />
+            <BannerText $info>
+              Prueba GoAgent Pro gratis por {TRIAL_DAYS} días: sincronización de
+              pólizas y calendarios, sin registrar tarjeta.
+            </BannerText>
+          </BannerLeft>
+          <BannerAction $info onClick={() => navigate("/pricing")}>
+            Comenzar prueba gratis
+          </BannerAction>
+        </SubscriptionBanner>
+      )}
+
       {/* Banner de suscripción inactiva */}
-      {!isSubscribed && (
+      {!isSubscribed && !trial?.available && (
         <SubscriptionBanner>
           <BannerLeft>
             <Icon iconName="LockOutlined" size={20} customColor="#d97706" />
@@ -665,7 +700,8 @@ const DashboardText = styled.p<{ $theme: PreferedScheme }>`
   color: ${(p) => (p.$theme === "Dark" ? "#64748b" : "#64748b")};
 `;
 
-const SubscriptionBanner = styled.div`
+// $info: azul (prueba gratis); sin el, ambar (sin suscripcion).
+const SubscriptionBanner = styled.div<{ $info?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -673,8 +709,8 @@ const SubscriptionBanner = styled.div`
   flex-wrap: wrap;
   padding: 12px 16px;
   border-radius: 10px;
-  background: rgba(245, 158, 11, 0.08);
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: ${(p) => (p.$info ? "rgba(21, 93, 252, 0.06)" : "rgba(245, 158, 11, 0.08)")};
+  border: 1px solid ${(p) => (p.$info ? "rgba(21, 93, 252, 0.25)" : "rgba(245, 158, 11, 0.3)")};
 `;
 
 const BannerLeft = styled.div`
@@ -685,20 +721,20 @@ const BannerLeft = styled.div`
   min-width: 0;
 `;
 
-const BannerText = styled.p`
+const BannerText = styled.p<{ $info?: boolean }>`
   font-size: 13px;
   font-weight: 500;
-  color: #d97706;
+  color: ${(p) => (p.$info ? "#155dfc" : "#d97706")};
   line-height: 1.4;
 `;
 
-const BannerAction = styled.button`
+const BannerAction = styled.button<{ $info?: boolean }>`
   flex-shrink: 0;
   padding: 6px 14px;
   border-radius: 8px;
-  border: 1.5px solid rgba(245, 158, 11, 0.5);
-  background: rgba(245, 158, 11, 0.1);
-  color: #d97706;
+  border: 1.5px solid ${(p) => (p.$info ? "rgba(21, 93, 252, 0.4)" : "rgba(245, 158, 11, 0.5)")};
+  background: ${(p) => (p.$info ? "rgba(21, 93, 252, 0.08)" : "rgba(245, 158, 11, 0.1)")};
+  color: ${(p) => (p.$info ? "#155dfc" : "#d97706")};
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
@@ -706,7 +742,7 @@ const BannerAction = styled.button`
   transition: background 0.15s;
 
   &:hover {
-    background: rgba(245, 158, 11, 0.18);
+    background: ${(p) => (p.$info ? "rgba(21, 93, 252, 0.14)" : "rgba(245, 158, 11, 0.18)")};
   }
 `;
 

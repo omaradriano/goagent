@@ -27,12 +27,28 @@ type Agente struct {
 	StripeSubscriptionID *string    `gorm:"column:stripe_subscription_id" json:"-"`
 	CancelAtPeriodEnd    bool       `gorm:"column:cancel_at_period_end;default:false" json:"cancel_at_period_end"`
 	CurrentPeriodEnd     int64      `gorm:"column:current_period_end;default:0" json:"current_period_end"`
+	// Fin de la prueba gratis; nil = nunca la ha usado.
+	TrialEndsAt *time.Time `gorm:"column:trial_ends_at" json:"trial_ends_at"`
 
 	Aseguradora *AseguradoraConf `gorm:"foreignKey:AseguradoraID" json:"aseguradora,omitempty"`
 	Polizas     []Poliza         `gorm:"foreignKey:AgenteID" json:"polizas,omitempty"`
 }
 
 func (Agente) TableName() string { return "agentes" }
+
+// TrialDays es la duracion de la prueba gratis (sin tarjeta, una sola vez).
+const TrialDays = 30
+
+// TrialActive indica si la prueba gratis sigue vigente.
+func (a *Agente) TrialActive(now time.Time) bool {
+	return a.TrialEndsAt != nil && now.Before(*a.TrialEndsAt)
+}
+
+// HasAccess es la regla de acceso a las funciones de pago: suscripcion
+// pagada en Stripe o prueba gratis vigente.
+func (a *Agente) HasAccess(now time.Time) bool {
+	return a.IsSubscribed || a.TrialActive(now)
+}
 
 func (a *Agente) BeforeCreate(tx *gorm.DB) error {
 	if a.AgenteUUID == uuid.Nil {

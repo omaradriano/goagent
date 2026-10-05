@@ -9,6 +9,12 @@ import {
   MayorText,
 } from "../styles/CssComponents";
 import { AuthContext, SubscriptionContext } from "../Context/ContextConfig";
+import {
+  TRIAL_DAYS,
+  startTrial,
+  trialDaysLabel,
+  trialFromStatus,
+} from "../functions/trial";
 
 // ── Animations ───────────────────────────────────────────────────────────────
 const fadeUp = keyframes`
@@ -250,6 +256,36 @@ const AlreadySubscribed = styled.div`
   gap: 0.5rem;
 `;
 
+// Boton secundario (contorno) para suscribirse cuando la accion principal es
+// la prueba gratis.
+const SecondaryButton = styled(CheckoutButton)`
+  margin-top: 0.6rem;
+  background: transparent;
+  color: #155dfc;
+  border: 1.5px solid rgba(21, 93, 252, 0.35);
+`;
+
+const TrialNote = styled.p`
+  margin-top: 0.6rem;
+  font-size: 0.78rem;
+  color: #888;
+  text-align: center;
+`;
+
+const TrialNotice = styled(AlreadySubscribed)`
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-bottom: 0.75rem;
+  font-weight: 600;
+  text-align: center;
+
+  small {
+    font-size: 0.8rem;
+    font-weight: 500;
+    opacity: 0.85;
+  }
+`;
+
 // ── Trust strip ──────────────────────────────────────────────────────────────
 const TrustStrip = styled.div`
   display: flex;
@@ -340,7 +376,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "¿Hay periodo de prueba?",
-    a: "Por el momento no ofrecemos periodo de prueba, pero puedes crear una cuenta gratuita y explorar la plataforma antes de suscribirte.",
+    a: `Sí. Tienes ${TRIAL_DAYS} días gratis con acceso completo y sin registrar tarjeta. Al terminar, suscríbete para seguir usando las funciones. La prueba es una sola vez por cuenta.`,
   },
 ];
 
@@ -356,6 +392,32 @@ const Pricing: React.FC = () => {
 
   const auth = useContext(AuthContext)
   const navigate = useNavigate()
+  const trial = subscription?.trial;
+  const isAuthenticated = auth?.session != null;
+  // Sin sesion no sabemos si ya la uso: se ofrece y el registro decide.
+  const showTrialCta = !isSubscribed && (!isAuthenticated || (trial?.available ?? false));
+  const [trialLoading, setTrialLoading] = useState<boolean>(false);
+
+  const handleStartTrial = async () => {
+    if (!isAuthenticated) {
+      navigate("/auth/register");
+      return;
+    }
+    setTrialLoading(true);
+    setErrorMessage(null);
+    try {
+      const status = await startTrial();
+      subscription?.setIsSubscribed(status.is_subscribed);
+      subscription?.setTrial(trialFromStatus(status));
+      navigate("/dashboard");
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : "No se pudo activar la prueba gratis.",
+      );
+    } finally {
+      setTrialLoading(false);
+    }
+  };
 
   const handleCheckout = async () => {
     setLoading(true);
@@ -482,7 +544,39 @@ const Pricing: React.FC = () => {
             </div>
           )}
 
-          {isSubscribed ? (
+          {trial?.isTrial ? (
+            <>
+              <TrialNotice>
+                <span>
+                  Prueba gratis activa · te quedan {trialDaysLabel(trial.daysLeft)}
+                </span>
+                {trial.endsAt && <small>Termina el {trial.endsAt}</small>}
+              </TrialNotice>
+              <CheckoutButton onClick={handleCheckout} disabled={loading}>
+                <Icon iconName="CreditCard" size={18} customColor="#fff" />
+                {loading ? "Redirigiendo a Stripe..." : "Suscribirme ahora"}
+              </CheckoutButton>
+              {/* El backend solo difiere el cobro con mas de 48 h restantes */}
+              {trial.daysLeft > 2 && (
+                <TrialNote>
+                  No se te cobra hasta que termine tu prueba.
+                </TrialNote>
+              )}
+            </>
+          ) : showTrialCta ? (
+            <>
+              <CheckoutButton onClick={handleStartTrial} disabled={trialLoading}>
+                <Icon iconName="CardGiftcard" size={18} customColor="#fff" />
+                {trialLoading
+                  ? "Activando prueba..."
+                  : `Comenzar prueba gratis de ${TRIAL_DAYS} días`}
+              </CheckoutButton>
+              <TrialNote>Sin tarjeta · Acceso completo · Una vez por cuenta</TrialNote>
+              <SecondaryButton onClick={handleCheckout} disabled={loading}>
+                {loading ? "Redirigiendo a Stripe..." : "Suscribirme ahora"}
+              </SecondaryButton>
+            </>
+          ) : isSubscribed ? (
             periodEnd ? (
               <CancelledNotice>
                 <Icon iconName="EventBusy" size={18} customColor="#f59e0b" />

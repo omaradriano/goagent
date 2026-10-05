@@ -61,6 +61,7 @@ func NewRouter() http.Handler {
 			r.Post("/api/create_suscription_payment", handlers.CreateStripeCheckoutSession)
 			r.Get("/api/subscription_status", handlers.ApiGetSubscriptionStatus)
 			r.Post("/api/cancel_subscription", handlers.ApiCancelSubscription)
+			r.Post("/api/start_trial", handlers.ApiStartTrial)
 		})
 
 		// JWT + suscripción requerida (escritura)

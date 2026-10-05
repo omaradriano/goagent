@@ -3,6 +3,7 @@ package middlewares
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/omaradriano/cobranzawebscrapper_server/internal/dto"
 	"github.com/omaradriano/cobranzawebscrapper_server/internal/models"
@@ -21,7 +22,7 @@ func SubscriptionMiddleware(next http.Handler) http.Handler {
 
 		var agente models.Agente
 		err := SubscriptionDB.WithContext(r.Context()).
-			Select("is_subscribed").
+			Select("is_subscribed", "trial_ends_at").
 			Where("agente_uuid = ?", uuid).
 			First(&agente).Error
 
@@ -30,7 +31,7 @@ func SubscriptionMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		if !agente.IsSubscribed {
+		if !agente.HasAccess(time.Now()) {
 			writeSubscriptionError(w, http.StatusForbidden, "Se requiere una suscripción activa para esta acción")
 			return
 		}

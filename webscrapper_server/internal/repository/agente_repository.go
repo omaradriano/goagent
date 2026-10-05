@@ -22,6 +22,7 @@ type AgenteRepository interface {
 	UpdateProfileFields(ctx context.Context, agenteID int, fields map[string]any) error
 	GetSubscriptionStatus(ctx context.Context, uuid string) (*models.Agente, error)
 	GetSubscriptionID(ctx context.Context, uuid string) (string, error)
+	StartTrial(ctx context.Context, uuid string, days int) (bool, error)
 	ValidateResetToken(ctx context.Context, token string) (string, string, string, time.Time, error)
 	ValidateConfirmationToken(ctx context.Context, token string) (string, time.Time, error)
 	FindIsVerified(ctx context.Context, token string, uuid string) (bool, error)
@@ -136,13 +137,23 @@ func (r *agenteRepository) UpdateProfileFields(ctx context.Context, agenteID int
 func (r *agenteRepository) GetSubscriptionStatus(ctx context.Context, uuid string) (*models.Agente, error) {
 	var agente models.Agente
 	err := r.db.WithContext(ctx).
-		Select("is_subscribed", "cancel_at_period_end", "current_period_end").
+		Select("is_subscribed", "cancel_at_period_end", "current_period_end", "trial_ends_at").
 		Where("agente_uuid = ?", uuid).
 		First(&agente).Error
 	if err != nil {
 		return nil, err
 	}
 	return &agente, nil
+}
+
+// StartTrial activa la prueba gratis solo si el agente nunca la ha usado y no
+// tiene suscripcion pagada. Es un solo UPDATE condicionado para que dos
+// peticiones simultaneas no la activen dos veces; devuelve false si no aplico.
+func (r *agenteRepository) StartTrial(ctx context.Context, uuid string, days int) (bool, error) {
+	res := r.db.WithContext(ctx).Model(&models.Agente{}).
+		Where("agente_uuid = ? AND trial_ends_at IS NULL AND is_subscribed = false", uuid).
+		Update("trial_ends_at", gorm.Expr("now() + make_interval(days => ?)", days))
+	return res.RowsAffected > 0, res.Error
 }
 
 func (r *agenteRepository) GetSubscriptionID(ctx context.Context, uuid string) (string, error) {
