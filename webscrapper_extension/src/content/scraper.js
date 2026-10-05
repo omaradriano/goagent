@@ -24,8 +24,18 @@ export function capturePolizaDetails() {
     };
   });
 
+  const numPoliza = getText("ctl00_ContentPlaceHolder1_LbPoliza")?.trim();
+  // En el detalle el portal muestra el numero de poliza en "Contratante"; el
+  // nombre real solo sale en la grilla de la cartera (getPolizasList). Se
+  // descarta ese valor para no guardarlo como contratante.
+  const contratanteDetalle = getText("ctl00_ContentPlaceHolder1_lbNomCont")?.trim();
+  const contratante =
+    contratanteDetalle && contratanteDetalle !== numPoliza
+      ? contratanteDetalle
+      : undefined;
+
   return {
-    num_poliza: getText("ctl00_ContentPlaceHolder1_LbPoliza")?.trim(),
+    num_poliza: numPoliza,
     tipo_seguro: getText("ctl00_ContentPlaceHolder1_lbTSeguro"),
     fecha_emision: formatDateSlash(
       getText("ctl00_ContentPlaceHolder1_lbFInicio"),
@@ -34,7 +44,7 @@ export function capturePolizaDetails() {
     forma_pago: getText("ctl00_ContentPlaceHolder1_lbFPPoliza"),
     estatus: getText("ctl00_ContentPlaceHolder1_lbStatus"),
     medio_cobro: getText("ctl00_ContentPlaceHolder1_lbMCobro"),
-    contratante: getText("ctl00_ContentPlaceHolder1_lbNomCont"),
+    contratante,
     dia_cobro: Number(getText("ctl00_ContentPlaceHolder1_lbDiaCobro")),
     moneda: getQuery("#ctl00_ContentPlaceHolder1_lbMoneda"),
     pais: getQuery("#ctl00_ContentPlaceHolder1_lbPais"),
@@ -69,10 +79,20 @@ export function getPolizasList() {
       const estatus =
         row?.querySelector("span[id$='_lblEstatus']")?.innerText.trim() ??
         null;
+      const idPoliza = a.innerText.trim();
+      // Contratante: la celda siguiente a la del numero de poliza (columnas
+      // No. Poliza | Contratante | Asegurado Principal | ...). Es la unica
+      // fuente con el nombre real: el detalle repite ahi el numero de poliza.
+      // Las columnas opcionales (botones) van al final y no alteran esta.
+      const contratanteRaw =
+        a.closest("td")?.nextElementSibling?.innerText.trim() ?? "";
+      const contratante =
+        contratanteRaw && contratanteRaw !== idPoliza ? contratanteRaw : null;
       return {
         idPostback: match ? match[1] : null,
-        idPoliza: a.innerText.trim(),
+        idPoliza,
         estatus,
+        contratante,
       };
     })
     .filter((item) => item.idPostback !== null);

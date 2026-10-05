@@ -72,6 +72,7 @@ func NewRouter() http.Handler {
 			// Captura / scrapping de polizas
 			r.Post("/scrapping/poliza", handlers.ApiPostPoliza)
 			r.Post("/scrapping/polizas", handlers.ApiPostPolizas)
+			r.Post("/scrapping/polizas/contratantes", handlers.ApiPostPolizasContratantes)
 
 			// Modificación de polizas
 			r.Patch("/scrapping/poliza", handlers.ApiPatchPoliza)

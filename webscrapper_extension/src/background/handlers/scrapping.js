@@ -342,6 +342,8 @@ async function capturePolizaByNum(tabId, pageNum, idPoliza) {
 
     const payload = await scrapeCurrentDetailPage(tabId);
     if (payload.num_poliza === idPoliza) {
+      // El detalle no trae el contratante real; se toma de la grilla.
+      if (row.contratante) payload.contratante = row.contratante;
       return payload;
     }
 
@@ -354,6 +356,32 @@ async function capturePolizaByNum(tabId, pageNum, idPoliza) {
   }
 
   throw lastError;
+}
+
+// Guarda el contratante de cada fila de la pagina (solo se ve en la grilla,
+// no en el detalle). Llena las polizas ya registradas aunque no se abran en
+// este sync; las altas lo llevan en su propio payload. Un fallo aqui no debe
+// detener la sincronizacion.
+async function saveGridContratantes(pageItems, pageNum) {
+  const items = pageItems
+    .filter((item) => item.contratante)
+    .map((item) => ({ numpoliza: item.idPoliza, contratante: item.contratante }));
+  if (items.length === 0) return;
+
+  try {
+    const res = await apiRequest("/v1/scrapping/polizas/contratantes", {
+      method: "POST",
+      body: JSON.stringify({ items }),
+    });
+    console.log(
+      `[GoAgent][sync][grid] pagina ${pageNum}: ${items.length} contratante(s) enviados, ${res?.payload?.updated ?? 0} actualizado(s)`,
+    );
+  } catch (error) {
+    console.warn(
+      `[GoAgent][sync][grid] pagina ${pageNum}: no se pudieron guardar los contratantes`,
+      error,
+    );
+  }
 }
 
 // Errores del portal seguidos (sin una captura exitosa entre ellos) antes de
@@ -620,6 +648,8 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       action: "get-polizas-list",
     });
     const allPageItems = listRes?.data?.polizas ?? [];
+
+    await saveGridContratantes(allPageItems, pageNum);
 
     console.log(
       `[GoAgent][sync][grid] pagina ${pageNum}: ${allPageItems.length} poliza(s) leidas de la grilla (numpoliza+estatus en vivo)`,

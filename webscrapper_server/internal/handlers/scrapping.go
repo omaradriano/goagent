@@ -124,7 +124,7 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 			item.NumPoliza, item.Plan, item.TipoSeguro, item.Direccion.Calle, item.Direccion.CodigoPostal,
 			item.Direccion.Ciudad, item.Direccion.Colonia, item.Direccion.Estado, item.Moneda,
 			item.Telefono, item.SumaAsegurada, item.Email, item.Pais, agenteID, tipoPoliza,
-			nonEmptyPtr(item.Contratante),
+			contratanteValue(item.Contratante, item.NumPoliza),
 		)
 	}
 
@@ -394,7 +394,7 @@ func ApiPostPoliza(w http.ResponseWriter, r *http.Request) {
 		Email:            &item.Email,
 		Pais:             &item.Pais,
 		TipoPoliza:       tipoPoliza,
-		Contratante:      nonEmptyPtr(item.Contratante),
+		Contratante:      contratanteValue(item.Contratante, item.NumPoliza),
 		AgenteID:         &aid,
 	}
 
@@ -1125,8 +1125,8 @@ func ApiPutPoliza(w http.ResponseWriter, r *http.Request) {
 		"tipo_poliza":       tipoPoliza,
 	}
 	// Si el scrape no trae contratante no se borra el que ya estaba guardado.
-	if c := strings.TrimSpace(item.Contratante); c != "" {
-		fields["contratante"] = c
+	if c := contratanteValue(item.Contratante, item.NumPoliza); c != nil {
+		fields["contratante"] = *c
 	}
 	if err := deps.PolizaRepo.UpdatePolizaFields(r.Context(), item.NumPoliza, agenteID, fields, deps.AuditRepo); err != nil {
 		services.Log.ErrorMessage(err.Error())
@@ -1244,11 +1244,63 @@ func normalizeNameSQL(expr string) string {
 	return fmt.Sprintf("translate(lower(%s), 'áéíóúüàèìòù', 'aeiouuaeiou')", expr)
 }
 
-// nonEmptyPtr devuelve nil para cadenas vacias (columna en NULL).
-func nonEmptyPtr(s string) *string {
-	s = strings.TrimSpace(s)
-	if s == "" {
+// contratanteValue limpia el contratante recibido de la extension. El
+// detalle de poliza del portal muestra el numero de poliza en el campo
+// "Contratante" (el nombre real solo sale en la grilla de la cartera), y las
+// versiones anteriores de la extension lo mandaban asi: ese valor se descarta
+// (nil = no tocar la columna).
+func contratanteValue(contratante, numPoliza string) *string {
+	c := strings.TrimSpace(contratante)
+	if c == "" || strings.EqualFold(c, strings.TrimSpace(numPoliza)) {
 		return nil
 	}
-	return &s
+	return &c
+}
+
+// ApiPostPolizasContratantes guarda en bloque el contratante de cada poliza
+// tal como lo muestra la grilla de la cartera (PolizasAgente.aspx). La
+// extension lo manda por cada pagina que lee, asi toda la cartera ya
+// registrada se llena en cualquier sincronizacion sin abrir cada detalle.
+// Solo toca polizas del agente que ya existen y cuyo valor cambio.
+func ApiPostPolizasContratantes(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Methods", "POST")
+
+	agenteUUID, _ := r.Context().Value(middlewares.UserIDKey).(string)
+	agenteID, err := deps.AgenteRepo.FindIDByUUID(r.Context(), agenteUUID)
+	if err != nil {
+		services.HandleResponseError(http.StatusBadRequest, "Error obteniendo información del agente", w)
+		return
+	}
+
+	var body dto.PostItems_Contratantes
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		services.HandleResponseError(http.StatusBadRequest, "Error decoding JSON", w)
+		return
+	}
+
+	var nums, contratantes []string
+	for _, item := range body.Items {
+		if c := contratanteValue(item.Contratante, item.NumPoliza); c != nil {
+			nums = append(nums, strings.TrimSpace(item.NumPoliza))
+			contratantes = append(contratantes, *c)
+		}
+	}
+
+	var updated int64
+	if len(nums) > 0 {
+		res := deps.DB.WithContext(r.Context()).Exec(`
+			UPDATE polizas p SET contratante = v.contratante
+			FROM UNNEST(?::text[], ?::text[]) AS v(numpoliza, contratante)
+			WHERE p.agente_id = ? AND p.numpoliza = v.numpoliza
+			  AND p.contratante IS DISTINCT FROM v.contratante`,
+			pq.Array(nums), pq.Array(contratantes), agenteID)
+		if res.Error != nil {
+			services.Log.ErrorMessage("Error guardando contratantes: " + res.Error.Error())
+			services.HandleResponseError(http.StatusInternalServerError, "Error guardando contratantes", w)
+			return
+		}
+		updated = res.RowsAffected
+	}
+
+	services.HandleResponseSuccessWithData(map[string]int64{"updated": updated}, w)
 }

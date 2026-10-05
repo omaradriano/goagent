@@ -1,0 +1,1 @@
+-- Sin reversa: los valores borrados eran el numero de poliza, no un contratante.

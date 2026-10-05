@@ -1,5 +1,15 @@
 package dto
 
+// Contratante de una fila de la grilla de la cartera (PolizasAgente.aspx).
+type PostItem_Contratante struct {
+	NumPoliza   string `json:"numpoliza"`
+	Contratante string `json:"contratante"`
+}
+
+type PostItems_Contratantes struct {
+	Items []PostItem_Contratante `json:"items"`
+}
+
 type PostItem_Poliza struct {
 	Asegurado     string                   `json:"asegurado"`
 	Contratante   string                   `json:"contratante"`
