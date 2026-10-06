@@ -1,14 +1,17 @@
 import { useEffect, useState } from "react";
+import { Button } from "@/components/animate-ui/components/buttons/button";
 import { DevTag } from "@/popup/components/DevTag";
 import { Loader } from "@/popup/components/Loader";
 import { AuthView } from "@/popup/views/AuthView";
 import { ManagementView } from "@/popup/views/ManagementView";
 import {
   getActiveTab,
+  openTab,
   rememberEmail,
   sendToBackground,
   type SessionData,
 } from "@/popup/lib/chrome";
+import { FRONTEND_URL } from "../shared/env.js";
 
 type View =
   | { name: "loading" }
@@ -59,7 +62,26 @@ export function App() {
           alt="Logo de seguros monterrey"
           className="h-[50px]"
         />
-        <DevTag />
+        <div className="flex items-center gap-1.5">
+          <DevTag />
+          {/* Con sesion abre el dashboard; sin sesion, la pagina de inicio. */}
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label="Abrir GoAgent web"
+            title="Abrir GoAgent web"
+            onClick={() =>
+              openTab(
+                view.name === "management"
+                  ? `${FRONTEND_URL}/dashboard`
+                  : FRONTEND_URL,
+              )
+            }
+          >
+            <i className="fa-solid fa-arrow-up-right-from-square text-primary" />
+          </Button>
+        </div>
       </header>
 
       <main className="h-full bg-surface p-1.5">
