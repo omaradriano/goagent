@@ -62,6 +62,10 @@ func NewRouter() http.Handler {
 			r.Get("/api/subscription_status", handlers.ApiGetSubscriptionStatus)
 			r.Post("/api/cancel_subscription", handlers.ApiCancelSubscription)
 			r.Post("/api/start_trial", handlers.ApiStartTrial)
+
+			// Historial de sincronizaciones (lectura desde la web)
+			r.Get("/sync-runs", handlers.ApiGetSyncRuns)
+			r.Get("/sync-runs/{syncID}/eventos", handlers.ApiGetSyncRunEventos)
 		})
 
 		// JWT + suscripción requerida (escritura)
@@ -73,6 +77,10 @@ func NewRouter() http.Handler {
 			r.Post("/scrapping/poliza", handlers.ApiPostPoliza)
 			r.Post("/scrapping/polizas", handlers.ApiPostPolizas)
 			r.Post("/scrapping/polizas/contratantes", handlers.ApiPostPolizasContratantes)
+
+			// Historial de sincronizaciones (la extension abre y cierra cada sync)
+			r.Post("/scrapping/sync-runs", handlers.ApiPostSyncRun)
+			r.Patch("/scrapping/sync-runs/{syncID}", handlers.ApiPatchSyncRun)
 
 			// Modificación de polizas
 			r.Patch("/scrapping/poliza", handlers.ApiPatchPoliza)

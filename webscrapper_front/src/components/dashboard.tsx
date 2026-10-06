@@ -13,6 +13,7 @@ import Button from "./button";
 import Icon from "./icon";
 import SearchBar from "./searchbar";
 import AgenteSettings from "./agenteSettings";
+import SyncHistory from "./syncHistory";
 
 import {
   textTheme__css,
@@ -283,6 +284,9 @@ const Dashboard: React.FC = () => {
           }}
         />
       </StatContainer>
+
+      {/* Ultima sincronizacion: que polizas cambiaron */}
+      <SyncHistory />
 
       {/* Filters bar */}
       <FiltersBar $isDark={isDark}>

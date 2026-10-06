@@ -37,6 +37,9 @@ type PostItem_Poliza struct {
 	// NumPoliza (el leido del detalle) se capturo otra poliza y el PUT se
 	// rechaza.
 	ExpectedNumPoliza string `json:"expected_num_poliza,omitempty"`
+
+	// sync_run al que pertenece este cambio (opcional, ver migracion 19).
+	SyncID *int `json:"sync_id,omitempty"`
 }
 
 type PostItem_PolizaFlexiblePago struct {
@@ -53,6 +56,8 @@ type PostItem_PolizaFlexible struct {
 
 type PostItems_Poliza struct {
 	Payload []PostItem_Poliza `json:"payload"`
+	// sync_run al que pertenece esta alta (opcional, ver migracion 19).
+	SyncID *int `json:"sync_id,omitempty"`
 }
 
 type PatchItem_Agente struct {

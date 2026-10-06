@@ -358,6 +358,35 @@ async function capturePolizaByNum(tabId, pageNum, idPoliza) {
   throw lastError;
 }
 
+// Historial de sincronizaciones: cada sync abre un sync_run en el backend y
+// manda su sync_id en los PUT/POST de polizas, asi el dashboard web muestra
+// que polizas cambiaron (pagos detectados, estatus, altas). Nunca bloquea el
+// sync: si el backend no responde, se sigue sin sync_id (null).
+async function startSyncRun(tipo) {
+  try {
+    const res = await apiRequest("/v1/scrapping/sync-runs", {
+      method: "POST",
+      body: JSON.stringify({ tipo }),
+    });
+    return res?.payload?.sync_id ?? null;
+  } catch (error) {
+    console.warn("[GoAgent][sync] no se pudo registrar el inicio de la sincronizacion", error);
+    return null;
+  }
+}
+
+async function finishSyncRun(syncId, estado) {
+  if (!syncId) return;
+  try {
+    await apiRequest(`/v1/scrapping/sync-runs/${syncId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ estado }),
+    });
+  } catch (error) {
+    console.warn("[GoAgent][sync] no se pudo registrar el fin de la sincronizacion", error);
+  }
+}
+
 // Guarda el contratante de cada fila de la pagina (solo se ve en la grilla,
 // no en el detalle). Llena las polizas ya registradas aunque no se abran en
 // este sync; las altas lo llevan en su propio payload. Un fallo aqui no debe
@@ -451,6 +480,7 @@ export async function handleGetAllInDb(request, sender, sendResponse) {
 }
 
 export async function handlePostUniqueDb(request, sender, sendResponse) {
+  let syncId = null;
   if (await blockIfNoActiveSubscription(request.tab)) {
     sendResponse({ success: false, message: NO_SUBSCRIPTION_MESSAGE });
     return;
@@ -496,6 +526,8 @@ export async function handlePostUniqueDb(request, sender, sendResponse) {
     // completo (PUT) con los mismos datos ya capturados, igual que ya hace
     // el flujo de resync de cartera completa para candidatas/mismatches.
     let mensaje = "Se ha cargado el registro satisfactoriamente.";
+    syncId = await startSyncRun("individual");
+    request.payload.sync_id = syncId;
     try {
       await apiRequest("/v1/scrapping/poliza", {
         method: "POST",
@@ -511,6 +543,7 @@ export async function handlePostUniqueDb(request, sender, sendResponse) {
       mensaje =
         "El registro ya existía; se actualizó con la información más reciente.";
     }
+    await finishSyncRun(syncId, "completada");
 
     await chrome.tabs.sendMessage(request.tab, {
       action: "show-progress-message",
@@ -528,6 +561,7 @@ export async function handlePostUniqueDb(request, sender, sendResponse) {
       payload: { ...request.payload },
     });
   } catch (error) {
+    await finishSyncRun(syncId, "detenida");
     sendResponse({ success: false, message: error.message });
   }
 }
@@ -542,6 +576,8 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     sendResponse({ success: false, message: NO_SUBSCRIPTION_MESSAGE });
     return;
   }
+
+  const syncId = await startSyncRun(fullResync ? "completa" : "parcial");
 
   const completedData = [];
   const failedPolizas = [];
@@ -751,6 +787,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
             body: JSON.stringify({
               ...payload,
               expected_num_poliza: item.idPoliza,
+              sync_id: syncId,
             }),
           });
           refreshedCount++;
@@ -880,6 +917,13 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     await chrome.tabs.remove(hiddenTab.id).catch(() => {});
   }
 
+  const syncEstado = () =>
+    abortReason
+      ? "detenida"
+      : syncInterruptRequested
+        ? "interrumpida"
+        : "completada";
+
   if (notificationId) {
     await chrome.tabs
       .sendMessage(originalTabId, {
@@ -915,6 +959,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       },
     });
 
+    await finishSyncRun(syncId, syncEstado());
     sendResponse({ success: false, message: abortReason });
     return;
   }
@@ -931,6 +976,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       },
     });
 
+    await finishSyncRun(syncId, syncEstado());
     sendResponse({
       success: true,
       message: `Sincronización sin cambios guardados; ${failedNums.length} póliza(s) fallaron`,
@@ -953,6 +999,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       },
     });
 
+    await finishSyncRun(syncId, syncEstado());
     sendResponse({
       success: true,
       message: syncInterruptRequested
@@ -966,9 +1013,12 @@ export async function handlePostAllDb(request, sender, sendResponse) {
     if (completedData.length > 0) {
       await apiRequest("/v1/scrapping/polizas", {
         method: "POST",
-        body: JSON.stringify({ payload: completedData }),
+        body: JSON.stringify({ payload: completedData, sync_id: syncId }),
       });
     }
+
+    // Se cierra despues del POST de altas: "por vencer despues" ya las cuenta.
+    await finishSyncRun(syncId, syncEstado());
 
     const resumen = `${completedData.length} nueva(s), ${refreshedCount} actualizada(s)`;
     const hayFallidas = failedNums.length > 0;
@@ -1017,6 +1067,7 @@ export async function handlePostAllDb(request, sender, sendResponse) {
       `[GoAgent][sync] fallo el POST final a /v1/scrapping/polizas con ${completedData.length} poliza(s)`,
       error,
     );
+    await finishSyncRun(syncId, "detenida");
     // La notificacion de progreso ya se borro arriba: sin este aviso el
     // agente no se enteraba de que las altas no se guardaron.
     await chrome.tabs

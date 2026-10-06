@@ -340,6 +340,13 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	insertedIDs := make([]int64, 0, len(polizasMap))
+	for _, id := range polizasMap {
+		insertedIDs = append(insertedIDs, id)
+	}
+	recordAltaEventos(r.Context(), agenteID,
+		deps.SyncRepo.OwnedSyncID(r.Context(), itemsReceived.SyncID, agenteID), insertedIDs)
+
 	response := map[string]any{
 		"message": fmt.Sprintf("¡Éxito! Se insertaron %d pólizas con sus respectivos asegurados correctamente.\n", totalInserted),
 	}
@@ -440,6 +447,9 @@ func ApiPostPoliza(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	recordAltaEventos(r.Context(), agenteID,
+		deps.SyncRepo.OwnedSyncID(r.Context(), item.SyncID, agenteID), []int64{int64(poliza.PolizaID)})
 
 	services.HandleResponseSuccess(w)
 }
@@ -545,11 +555,11 @@ func ApiGetDetails(w http.ResponseWriter, r *http.Request) {
 			COALESCE(COUNT(*), 0) as total,
 			COALESCE(COUNT(CASE WHEN p.estatus = 'En Vigor' THEN 1 END), 0) as activas,
 			COALESCE(COUNT(CASE WHEN p.estatus != 'En Vigor' THEN 1 END), 0) as inactivas,
-			COALESCE(COUNT(CASE WHEN ppc.next_payment <= CURRENT_DATE + %s AND p.estatus != 'Anulada' THEN 1 END), 0) as por_vencer
+			COALESCE(COUNT(CASE WHEN %s THEN 1 END), 0) as por_vencer
 		FROM polizas p
 		JOIN agentes a ON p.agente_id = a.agente_id
 		JOIN polizas_payments_conf ppc ON p.poliza_id = ppc.poliza_id
-		WHERE a.agente_uuid = ?`, repository.NextDueWindowSQL), userUUID).
+		WHERE a.agente_uuid = ?`, repository.PorVencerConditionSQL), userUUID).
 		Scan(&details).Error
 	if err != nil {
 		services.Log.ErrorMessage(err.Error())
@@ -1159,6 +1169,8 @@ func ApiPutPoliza(w http.ResponseWriter, r *http.Request) {
 	}
 
 	polizaID := int64(existing.PolizaID)
+	// next_payment antes del resync, para detectar pagos (ver sync_runs.go).
+	oldNext, _ := deps.SyncRepo.GetNextPayment(r.Context(), polizaID)
 	if tipoPoliza == "FLEXIBLE" {
 		if err := syncFlexiblePoliza(r.Context(), polizaID, item.FormaPago, item.DiaCobro, fechaEmision, item.Flexible); err != nil {
 			services.Log.ErrorMessage(err.Error())
@@ -1172,6 +1184,10 @@ func ApiPutPoliza(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+
+	newNext, _ := deps.SyncRepo.GetNextPayment(r.Context(), polizaID)
+	recordResyncEventos(r.Context(), agenteID, deps.SyncRepo.OwnedSyncID(r.Context(), item.SyncID, agenteID),
+		polizaID, existing.Estatus, item.Estatus, oldNext, newNext)
 
 	services.HandleResponseSuccess(w)
 }
