@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual de uso GoAgent</title>
+    <meta name="description" content="Guía paso a paso para empezar con GoAgent: registro, extensión de Chrome, sincronización de tu cartera y uso del dashboard.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* Mismo lenguaje visual que presentacion-goagent.html */
+        :root {
+            --bg: #fdfae7;
+            --primary: #155dfc;
+            --primary-light: rgba(21, 93, 252, 0.08);
+            --primary-border: rgba(21, 93, 252, 0.2);
+            --text-dark: #111111;
+            --text-muted: #6B6B6B;
+            --text-light: #999999;
+            --white: #ffffff;
+            --soft: #f7f7f5;
+            --card-border: rgba(0, 0, 0, 0.06);
+            --red: #e53e3e;
+            --green: #38a169;
+            --orange: #dd6b20;
+            --green-bg: #dcfce7;
+            --green-text: #16a34a;
+            --red-bg: #fef2f2;
+            --red-text: #dc2626;
+            --amber-bg: #ffedd5;
+            --amber-text: #c2410c;
+            --font: 'Space Grotesk', system-ui, sans-serif;
+            --sidebar: 280px;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; scroll-padding-top: 24px; }
+        body {
+            background: var(--bg);
+            color: var(--text-dark);
+            font-family: var(--font);
+            font-size: 17px;
+            line-height: 1.65;
+            -webkit-font-smoothing: antialiased;
+        }
+        .accent-line { position: fixed; top: 0; left: 0; width: 100%; height: 5px; background: var(--primary); z-index: 50; }
+
+        /* === LAYOUT === */
+        .layout { display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); max-width: 1240px; margin: 0 auto; }
+        .sidebar {
+            position: sticky; top: 0; height: 100vh; overflow-y: auto;
+            padding: 48px 24px 32px 32px;
+            border-right: 1.5px solid var(--card-border);
+        }
+        .brand { font-size: 26px; font-weight: 700; margin-bottom: 4px; }
+        .brand .hl { color: var(--primary); }
+        .brand-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 28px; }
+        .toc { list-style: none; counter-reset: toc; }
+        .toc li { counter-increment: toc; }
+        .toc a {
+            display: flex; gap: 10px; align-items: baseline;
+            padding: 7px 10px; border-radius: 8px;
+            color: var(--text-muted); text-decoration: none; font-size: 14px; font-weight: 500;
+            transition: background 0.15s, color 0.15s;
+        }
+        .toc a::before { content: counter(toc, decimal-leading-zero); font-size: 11px; color: var(--text-light); font-weight: 600; }
+        .toc a:hover { background: var(--primary-light); color: var(--text-dark); }
+        .toc a.active { background: var(--primary-light); color: var(--primary); }
+        .toc a.active::before { color: var(--primary); }
+
+        main { padding: 64px 64px 96px; min-width: 0; }
+
+        /* === HERO === */
+        .hero { padding: 24px 0 56px; border-bottom: 1.5px solid var(--card-border); margin-bottom: 56px; }
+        .eyebrow { font-size: 13px; font-weight: 600; color: var(--primary); letter-spacing: 3px; text-transform: uppercase; margin-bottom: 18px; }
+        .hero h1 { font-size: 64px; line-height: 1.05; font-weight: 700; margin-bottom: 20px; }
+        .hero h1 .hl { color: var(--primary); }
+        .hero p { font-size: 21px; color: var(--text-muted); max-width: 720px; }
+        .pill-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 28px; }
+        .pill {
+            background: var(--primary-light); color: var(--primary);
+            padding: 7px 18px; border-radius: 100px; font-size: 13px; font-weight: 600;
+            border: 1.5px solid var(--primary-border);
+        }
+
+        /* === SECTIONS === */
+        section.doc { margin-bottom: 72px; }
+        section.doc > h2 { font-size: 38px; line-height: 1.15; font-weight: 700; margin-bottom: 14px; }
+        section.doc > h2 .hl { color: var(--primary); }
+        .lead { font-size: 19px; color: var(--text-muted); max-width: 760px; margin-bottom: 28px; }
+        h3 { font-size: 21px; font-weight: 700; margin: 32px 0 10px; }
+        p { margin-bottom: 14px; }
+        a { color: var(--primary); }
+        strong { font-weight: 600; }
+        code, kbd {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.86em;
+            background: var(--white); border: 1px solid var(--card-border);
+            border-radius: 6px; padding: 1px 6px;
+        }
+        .ui { font-weight: 600; color: var(--primary); white-space: nowrap; }
+
+        ul.bullets { list-style: none; margin: 8px 0 18px; }
+        ul.bullets li { position: relative; padding: 5px 0 5px 28px; }
+        ul.bullets li::before {
+            content: ''; position: absolute; left: 0; top: 15px;
+            width: 10px; height: 10px; border-radius: 3px; background: var(--primary);
+        }
+
+        /* === STEPS === */
+        .steps { list-style: none; counter-reset: step; margin: 24px 0; display: flex; flex-direction: column; gap: 14px; }
+        .steps > li {
+            counter-increment: step; position: relative;
+            background: var(--white); border: 1.5px solid var(--card-border); border-radius: 16px;
+            padding: 20px 24px 20px 84px;
+        }
+        .steps > li::before {
+            content: counter(step); position: absolute; left: 22px; top: 20px;
+            width: 42px; height: 42px; border-radius: 50%;
+            background: var(--primary); color: var(--white);
+            font-size: 18px; font-weight: 700; display: flex; align-items: center; justify-content: center;
+        }
+        .steps > li .st { display: block; font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+        .steps > li p:last-child { margin-bottom: 0; }
+
+        /* === CARDS === */
+        .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin: 24px 0; }
+        .grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .card { background: var(--white); border: 1.5px solid var(--card-border); border-radius: 16px; padding: 24px; }
+        .card .ci { font-size: 28px; margin-bottom: 8px; line-height: 1; }
+        .card .ct { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+        .card .cd { font-size: 15px; color: var(--text-muted); line-height: 1.55; }
+        .card .cd:last-child { margin-bottom: 0; }
+
+        /* === CALLOUTS === */
+        .callout {
+            display: flex; gap: 16px; align-items: flex-start;
+            border-radius: 16px; padding: 20px 24px; margin: 24px 0;
+            border: 1.5px solid var(--primary-border); background: var(--primary-light);
+        }
+        .callout .ico { font-size: 22px; line-height: 1.4; flex-shrink: 0; }
+        .callout .body > :last-child { margin-bottom: 0; }
+        .callout .title { font-weight: 700; margin-bottom: 4px; display: block; }
+        .callout.warn { border-color: rgba(221, 107, 32, 0.3); background: rgba(221, 107, 32, 0.07); }
+        .callout.warn .title { color: var(--amber-text); }
+        .callout.danger { border-color: rgba(229, 62, 62, 0.3); background: rgba(229, 62, 62, 0.06); }
+        .callout.danger .title { color: var(--red-text); }
+        .callout.ok { border-color: rgba(56, 161, 105, 0.3); background: rgba(56, 161, 105, 0.07); }
+        .callout.ok .title { color: var(--green-text); }
+
+        /* === MOCKUPS === */
+        .mockup { background: var(--white); border: 1.5px solid rgba(0, 0, 0, 0.08); border-radius: 16px; padding: 18px; margin: 24px 0; overflow: hidden; }
+        .mockup-bar { display: flex; gap: 7px; margin-bottom: 14px; }
+        .mockup-dot { width: 11px; height: 11px; border-radius: 50%; }
+        .mockup-dot.r { background: #ff5f57; } .mockup-dot.y { background: #ffbd2e; } .mockup-dot.g { background: #28c840; }
+        .mock-caption { font-size: 13px; color: var(--text-muted); margin-top: 10px; text-align: center; }
+
+        /* Barra del portal de Seguros Monterrey */
+        .portal-bar {
+            background: #0f72c1; color: #fff; border-radius: 6px;
+            padding: 12px 18px; display: flex; flex-wrap: wrap; gap: 8px 36px; align-items: center;
+            font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: 700;
+        }
+        .portal-bar .mark {
+            outline: 3px solid #ffd43b; outline-offset: 4px; border-radius: 4px;
+            background: rgba(255, 212, 59, 0.18); padding: 0 4px;
+        }
+        .portal-menu { display: flex; flex-wrap: wrap; gap: 6px 28px; margin-top: 8px; color: #fff; font-family: Arial, sans-serif; font-size: 13px; font-weight: 700; background: #0f72c1; border-radius: 6px; padding: 9px 18px; }
+
+        /* Formulario de registro */
+        .form-mock { display: grid; gap: 12px; max-width: 420px; }
+        .field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+        .field .input {
+            border: 1.5px solid rgba(0, 0, 0, 0.12); border-radius: 8px; padding: 9px 12px;
+            font-size: 14px; color: var(--text-muted); background: var(--white);
+        }
+        .field.focus .input { border-color: var(--primary); color: var(--text-dark); box-shadow: 0 0 0 3px var(--primary-light); }
+        .field .hint { font-size: 12px; color: var(--primary); margin-top: 4px; font-weight: 500; }
+
+        /* Popup de la extension */
+        .popup { width: 100%; max-width: 360px; margin: 0 auto; border: 1.5px solid rgba(0,0,0,0.1); border-radius: 14px; overflow: hidden; background: var(--white); font-size: 13px; }
+        .popup-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--card-border); }
+        .popup-logo { font-weight: 700; font-size: 15px; color: #0f72c1; }
+        .icon-btn { width: 30px; height: 30px; border-radius: 8px; border: 1.5px solid rgba(0,0,0,0.12); display: flex; align-items: center; justify-content: center; font-size: 14px; color: var(--primary); }
+        .icon-btn.mark { outline: 3px solid #ffd43b; outline-offset: 2px; }
+        .popup-body { padding: 14px; background: var(--soft); }
+        .popup-agent { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .popup-agent b { font-size: 16px; display: block; }
+        .popup-agent span { color: var(--text-muted); font-size: 12px; }
+        .popup-stats { display: flex; gap: 8px; margin-bottom: 10px; }
+        .popup-stat { flex: 1; background: var(--white); border: 1px solid var(--card-border); border-radius: 10px; text-align: center; padding: 8px 4px; }
+        .popup-stat b { display: block; font-size: 20px; color: var(--primary); }
+        .popup-stat.g b { color: var(--green); } .popup-stat.o b { color: var(--orange); }
+        .popup-stat span { font-size: 11px; color: var(--text-muted); }
+        .popup-btn { display: block; text-align: center; border-radius: 8px; padding: 9px; font-weight: 600; margin-top: 6px; }
+        .popup-btn.primary { background: var(--primary); color: #fff; }
+        .popup-btn.amber { background: #fffbeb; color: #92400e; border: 1.5px solid #fcd34d; }
+
+        /* Tarjetas de estadisticas del dashboard */
+        .stats { display: flex; gap: 12px; flex-wrap: wrap; }
+        .stat { flex: 1; min-width: 120px; background: var(--soft); border-radius: 12px; padding: 14px; text-align: center; }
+        .stat b { display: block; font-size: 28px; line-height: 1.2; }
+        .stat span { font-size: 12px; color: var(--text-muted); }
+        .c-blue { color: var(--primary); } .c-green { color: var(--green); } .c-red { color: var(--red); } .c-orange { color: var(--orange); }
+
+        .sync-card { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; justify-content: space-between; background: var(--white); border: 1.5px solid var(--card-border); border-radius: 12px; padding: 12px 14px; margin-top: 12px; }
+        .sync-card small { color: var(--text-muted); font-size: 12px; display: block; }
+        .chip { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 100px; margin-right: 4px; }
+        .chip.g { background: var(--green-bg); color: var(--green-text); }
+        .chip.a { background: var(--amber-bg); color: var(--amber-text); }
+        .chip.b { background: var(--primary-light); color: var(--primary); }
+
+        /* Tabla de problemas */
+        .table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--white); border: 1.5px solid var(--card-border); border-radius: 16px; overflow: hidden; margin: 24px 0; font-size: 15px; }
+        .table th { text-align: left; font-size: 13px; color: var(--text-muted); font-weight: 600; background: var(--soft); padding: 12px 18px; }
+        .table td { padding: 14px 18px; border-top: 1px solid var(--card-border); vertical-align: top; }
+        .table td:first-child { font-weight: 600; width: 40%; }
+
+        .compare { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin: 24px 0; }
+        .compare .card .tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 100px; background: var(--primary-light); color: var(--primary); margin-bottom: 10px; }
+
+        footer { border-top: 1.5px solid var(--card-border); padding-top: 28px; color: var(--text-muted); font-size: 14px; }
+
+        /* Menu movil */
+        .mobile-toc { display: none; }
+
+        @media (max-width: 980px) {
+            .layout { grid-template-columns: minmax(0, 1fr); }
+            .sidebar { display: none; }
+            main { padding: 40px 16px 72px; }
+            .hero h1 { font-size: 42px; }
+            .hero p { font-size: 18px; }
+            section.doc > h2 { font-size: 30px; }
+            .grid, .grid.three, .compare { grid-template-columns: minmax(0, 1fr); }
+            .steps > li { padding: 18px 18px 18px 70px; }
+            .steps > li::before { left: 16px; width: 38px; height: 38px; font-size: 16px; }
+            .mobile-toc { display: block; margin-bottom: 40px; }
+            .mobile-toc details { background: var(--white); border: 1.5px solid var(--card-border); border-radius: 12px; padding: 12px 16px; }
+            .mobile-toc summary { font-weight: 600; cursor: pointer; }
+            .mobile-toc .toc { margin-top: 10px; }
+            .table td:first-child { width: auto; }
+        }
+        @media print {
+            .sidebar, .mobile-toc, .accent-line { display: none; }
+            .layout { display: block; }
+            main { padding: 0; }
+            section.doc { break-inside: avoid-page; }
+            body { background: #fff; }
+        }
+    </style>
+</head>
+<body>
+<div class="accent-line"></div>
+
+<div class="layout">
+    <aside class="sidebar">
+        <div class="brand"><span class="hl">Go</span>Agent</div>
+        <div class="brand-sub">Manual de uso</div>
+        <nav aria-label="Contenido">
+            <ol class="toc" id="toc">
+                <li><a href="#antes">Antes de empezar</a></li>
+                <li><a href="#registro">Crea tu cuenta</a></li>
+                <li><a href="#prueba">Prueba gratis y suscripción</a></li>
+                <li><a href="#extension">Instala la extensión</a></li>
+                <li><a href="#primera">Primera sincronización</a></li>
+                <li><a href="#actualizar">Mantén tu cartera al día</a></li>
+                <li><a href="#resincronizar">Resincronizar todo</a></li>
+                <li><a href="#individual">Una sola póliza</a></li>
+                <li><a href="#dashboard">El dashboard</a></li>
+                <li><a href="#calendarios">Calendarios</a></li>
+                <li><a href="#ajustes">Ajustes</a></li>
+                <li><a href="#problemas">Solución de problemas</a></li>
+            </ol>
+        </nav>
+    </aside>
+
+    <main>
+        <header class="hero">
+            <div class="eyebrow">Manual de uso</div>
+            <h1>Empieza con <span class="hl">Go</span>Agent</h1>
+            <p>Todo lo que necesitas para registrarte, conectar la extensión con el portal de Seguros Monterrey y tener tu cartera de pólizas al día en un solo lugar.</p>
+            <div class="pill-row">
+                <span class="pill">⏱ Configuración en 10 minutos</span>
+                <span class="pill">🎁 30 días gratis sin tarjeta</span>
+                <span class="pill">🔒 Solo lectura del portal</span>
+            </div>
+        </header>
+
+        <nav class="mobile-toc" aria-label="Contenido">
+            <details>
+                <summary>Contenido del manual</summary>
+                <ol class="toc">
+                    <li><a href="#antes">Antes de empezar</a></li>
+                    <li><a href="#registro">Crea tu cuenta</a></li>
+                    <li><a href="#prueba">Prueba gratis y suscripción</a></li>
+                    <li><a href="#extension">Instala la extensión</a></li>
+                    <li><a href="#primera">Primera sincronización</a></li>
+                    <li><a href="#actualizar">Mantén tu cartera al día</a></li>
+                    <li><a href="#resincronizar">Resincronizar todo</a></li>
+                    <li><a href="#individual">Una sola póliza</a></li>
+                    <li><a href="#dashboard">El dashboard</a></li>
+                    <li><a href="#calendarios">Calendarios</a></li>
+                    <li><a href="#ajustes">Ajustes</a></li>
+                    <li><a href="#problemas">Solución de problemas</a></li>
+                </ol>
+            </details>
+        </nav>
+
+        <!-- 01 -->
+        <section class="doc" id="antes">
+            <div class="eyebrow">Paso 0</div>
+            <h2>Antes de <span class="hl">empezar</span></h2>
+            <p class="lead">GoAgent tiene dos partes que trabajan juntas: una <strong>extensión de Chrome</strong> que lee tu cartera desde el portal de Seguros Monterrey, y la <strong>plataforma web</strong> (www.goagent.com.mx) donde consultas y organizas todo.</p>
+
+            <div class="grid three">
+                <div class="card">
+                    <div class="ci">🌐</div>
+                    <div class="ct">Google Chrome</div>
+                    <p class="cd">La extensión funciona en Chrome de escritorio (Windows o Mac).</p>
+                </div>
+                <div class="card">
+                    <div class="ci">🏢</div>
+                    <div class="ct">Acceso al portal</div>
+                    <p class="cd">Tu usuario del portal de asesores de Seguros Monterrey (Línea Monterrey), como lo usas hoy.</p>
+                </div>
+                <div class="card">
+                    <div class="ci">🔢</div>
+                    <div class="ct">Tu número de asesor</div>
+                    <p class="cd">El que aparece como <strong>No. Asesor</strong> en la barra azul del portal. Lo necesitas para registrarte.</p>
+                </div>
+            </div>
+
+            <div class="callout">
+                <div class="ico">🔒</div>
+                <div class="body">
+                    <span class="title">GoAgent no guarda tu contraseña del portal</span>
+                    <p>La extensión solo lee la información que ya ves en pantalla mientras tienes tu sesión abierta en el portal. Nunca escribe ni modifica nada en Seguros Monterrey.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 02 -->
+        <section class="doc" id="registro">
+            <div class="eyebrow">Paso 1</div>
+            <h2>Crea tu <span class="hl">cuenta</span></h2>
+            <p class="lead">Regístrate en www.goagent.com.mx. Puedes hacerlo con correo y contraseña o con tu cuenta de Google.</p>
+
+            <h3>El dato más importante: tu número de asesor</h3>
+            <p>GoAgent relaciona tu cuenta con tu cartera del portal por medio del número de asesor. Antes de cada sincronización, la extensión compara el número de tu cuenta de GoAgent con el que muestra el portal, y si no son <strong>exactamente iguales</strong>, no sincroniza.</p>
+
+            <div class="mockup" aria-label="Ejemplo de la barra del portal">
+                <div class="mockup-bar"><span class="mockup-dot r"></span><span class="mockup-dot y"></span><span class="mockup-dot g"></span></div>
+                <div class="portal-bar">
+                    <span>Bienvenido: NOMBRE DEL ASESOR</span>
+                    <span class="mark">No. Asesor: 72127</span>
+                </div>
+                <div class="portal-menu"><span>Consultas</span><span>Mi SMNYL Asesores</span><span>Servicios</span><span>Reportes</span><span>Herramientas</span></div>
+                <p class="mock-caption">Copia el número tal cual aparece junto a «No. Asesor» en la barra azul del portal.</p>
+            </div>
+
+            <div class="callout danger">
+                <div class="ico">⚠️</div>
+                <div class="body">
+                    <span class="title">Escríbelo exactamente igual</span>
+                    <ul class="bullets">
+                        <li>Solo números, sin espacios, guiones ni letras.</li>
+                        <li>No agregues ni quites ceros: si el portal dice <code>72127</code>, escribe <code>72127</code>, no <code>072127</code>.</li>
+                        <li>Usa tu propio número: la extensión no deja sincronizar si el número de la cuenta no coincide con el de la sesión abierta en el portal.</li>
+                    </ul>
+                    <p>Si te equivocaste al registrarte, escríbenos desde la página de <a href="https://www.goagent.com.mx/support">Soporte</a> para corregirlo.</p>
+                </div>
+            </div>
+
+            <h3>Registro con correo y contraseña</h3>
+            <div class="grid">
+                <div>
+                    <ol class="steps">
+                        <li><span class="st">Abre «Registrarse»</span><p>En www.goagent.com.mx, entra a <span class="ui">Iniciar sesión</span> y elige crear una cuenta.</p></li>
+                        <li><span class="st">Llena el formulario</span><p>Correo, contraseña (dos veces), <strong>número de asesor</strong> y aseguradora <strong>Seguros Monterrey</strong>.</p></li>
+                        <li><span class="st">Confirma tu correo</span><p>Te enviamos un correo de verificación. Abre el enlace para activar tu cuenta (revisa también Spam).</p></li>
+                    </ol>
+                </div>
+                <div class="mockup" style="margin-top: 24px;">
+                    <div class="form-mock">
+                        <div class="field"><label>Correo</label><div class="input">tu@email.com</div></div>
+                        <div class="field"><label>Contraseña</label><div class="input">••••••••••</div></div>
+                        <div class="field focus"><label>Número de asesor</label><div class="input">72127</div><div class="hint">Igual que «No. Asesor» en el portal</div></div>
+                        <div class="field"><label>Aseguradora</label><div class="input">Seguros Monterrey ▾</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="callout">
+                <div class="ico">🔑</div>
+                <div class="body">
+                    <span class="title">Requisitos de la contraseña</span>
+                    <p>De 8 a 20 caracteres, con mayúsculas, minúsculas, al menos un número y un carácter especial (<code>@ $ ! % * ? &amp; . _</code>).</p>
+                </div>
+            </div>
+
+            <h3>Registro con Google</h3>
+            <p>Elige <span class="ui">Iniciar sesión con Google</span>. La primera vez te pediremos crear una contraseña y capturar tu <strong>número de asesor</strong> y tu aseguradora; aplican las mismas reglas de arriba.</p>
+        </section>
+
+        <!-- 03 -->
+        <section class="doc" id="prueba">
+            <div class="eyebrow">Paso 2</div>
+            <h2>Prueba gratis y <span class="hl">suscripción</span></h2>
+            <p class="lead">Para sincronizar tu cartera necesitas acceso activo. Empieza con 30 días gratis, sin registrar tarjeta.</p>
+
+            <ol class="steps">
+                <li><span class="st">Activa tu prueba</span><p>Desde el banner azul del dashboard o en <span class="ui">Precios</span>, pulsa <span class="ui">Comenzar prueba gratis de 30 días</span>. Tienes acceso completo de inmediato.</p></li>
+                <li><span class="st">Revisa los días restantes</span><p>El dashboard y tu perfil (arriba a la derecha) muestran cuántos días te quedan y cuándo termina.</p></li>
+                <li><span class="st">Suscríbete cuando quieras</span><p>Pulsa <span class="ui">Suscribirme ahora</span>; el pago es con tarjeta mediante Stripe. Si te suscribes antes de terminar la prueba, no se te cobra hasta que se acaben tus días gratis.</p></li>
+            </ol>
+
+            <div class="grid">
+                <div class="card">
+                    <div class="ct">GoAgent Pro · $199 / mes</div>
+                    <p class="cd">Facturado mensualmente. Puedes cancelar cuando quieras desde tu perfil (<span class="ui">Cancelar suscripción</span>); conservas el acceso hasta el fin del periodo pagado.</p>
+                </div>
+                <div class="card">
+                    <div class="ct">La prueba es una sola vez</div>
+                    <p class="cd">Cada cuenta puede usar los 30 días gratis una sola vez. Al terminar, tus datos se conservan; solo necesitas suscribirte para volver a sincronizar.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 04 -->
+        <section class="doc" id="extension">
+            <div class="eyebrow">Paso 3</div>
+            <h2>Instala la <span class="hl">extensión</span></h2>
+            <p class="lead">La extensión es la que lee tu cartera del portal y la envía a GoAgent.</p>
+
+            <div class="grid">
+                <div>
+                    <ol class="steps">
+                        <li><span class="st">Instálala desde la Chrome Web Store</span><p>Busca <strong>GoAgent</strong> en la Chrome Web Store (chromewebstore.google.com) y pulsa <span class="ui">Añadir a Chrome</span>.</p></li>
+                        <li><span class="st">Fíjala en la barra</span><p>Abre el icono de rompecabezas 🧩 de Chrome y fija GoAgent con el alfiler 📌 para tenerla siempre a la mano.</p></li>
+                        <li><span class="st">Inicia sesión</span><p>Abre la extensión e inicia sesión con tu correo y contraseña, con Google, o con <span class="ui">Iniciar sesión desde GoAgent web</span> si ya tienes la sesión abierta en la web.</p></li>
+                    </ol>
+                </div>
+                <div class="mockup" style="margin-top: 24px;">
+                    <div class="popup">
+                        <div class="popup-head">
+                            <span class="popup-logo">SEGUROS MONTERREY</span>
+                            <span class="icon-btn mark" title="Abrir GoAgent web">↗</span>
+                        </div>
+                        <div class="popup-body">
+                            <div class="popup-agent"><div><b>No. Asesor 72127</b><span>tu@email.com</span></div><span class="icon-btn" style="color: var(--red);">⏏</span></div>
+                            <div class="popup-stats">
+                                <div class="popup-stat"><b>361</b><span>Total</span></div>
+                                <div class="popup-stat g"><b>192</b><span>Activas</span></div>
+                                <div class="popup-stat o"><b>12</b><span>Por vencer</span></div>
+                            </div>
+                            <span class="popup-btn primary">Actualizar cartera</span>
+                            <span class="popup-btn amber">Resincronizar todo</span>
+                        </div>
+                    </div>
+                    <p class="mock-caption">El botón ↗ de arriba abre GoAgent web directamente.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 05 -->
+        <section class="doc" id="primera">
+            <div class="eyebrow">Paso 4</div>
+            <h2>Tu primera <span class="hl">sincronización</span></h2>
+            <p class="lead">La primera vez se cargan todas las pólizas de tu cartera. Según su tamaño puede tardar varios minutos.</p>
+
+            <ol class="steps">
+                <li><span class="st">Entra al portal</span><p>Inicia sesión en el portal de asesores de Seguros Monterrey como siempre, con tu propio usuario.</p></li>
+                <li><span class="st">Abre «Consulta de pólizas»</span><p>Desde el menú <span class="ui">Consultas</span>, abre la consulta de pólizas donde aparece la lista de toda tu cartera (página <code>PolizasAgente.aspx</code>).</p></li>
+                <li><span class="st">Deja la lista sin filtros</span><p>Los buscadores de la lista (No. Póliza, Contratante, Asegurado…) deben estar vacíos para que se recorra toda tu cartera.</p></li>
+                <li><span class="st">Pulsa «Sincronizar registros»</span><p>Abre la extensión en esa página y confirma. Verás avisos de progreso en la esquina del portal («Cargando registro 3 de 20, página 1 de 5»).</p></li>
+                <li><span class="st">Espera el aviso final</span><p>Al terminar verás «Se ha completado la sincronización». Abre GoAgent web y tu cartera ya estará ahí.</p></li>
+            </ol>
+
+            <div class="callout warn">
+                <div class="ico">⏳</div>
+                <div class="body">
+                    <span class="title">Mientras sincroniza</span>
+                    <ul class="bullets">
+                        <li>La extensión abre el portal en una pestaña en segundo plano: no la cierres ni cierres Chrome.</li>
+                        <li>Puedes seguir trabajando en otras pestañas.</li>
+                        <li>Puedes detenerla desde el aviso de progreso; lo que ya se capturó se guarda.</li>
+                    </ul>
+                </div>
+            </div>
+        </section>
+
+        <!-- 06 -->
+        <section class="doc" id="actualizar">
+            <div class="eyebrow">Uso diario</div>
+            <h2>Mantén tu cartera <span class="hl">al día</span></h2>
+            <p class="lead">Una vez cargada tu cartera, el botón de la extensión cambia a <span class="ui">Actualizar cartera</span>. Es la sincronización rápida que conviene hacer seguido (por ejemplo, cada semana o antes de revisar cobranza).</p>
+
+            <h3>¿Qué revisa «Actualizar cartera»?</h3>
+            <ul class="bullets">
+                <li><strong>Pólizas nuevas</strong> que aparecieron en el portal y aún no están en GoAgent.</li>
+                <li><strong>Pólizas próximas a vencer</strong> (según tus <a href="#ajustes">días de anticipación</a>) para detectar si ya se pagaron.</li>
+                <li><strong>Cambios de estatus</strong>, por ejemplo una póliza que pasó de En Vigor a Anulada.</li>
+                <li>El <strong>contratante</strong> de cada póliza de la lista.</li>
+            </ul>
+            <p>Las demás pólizas no se abren una por una, por eso es mucho más rápida que la primera carga. Se inicia igual: en la lista de pólizas del portal, sin filtros.</p>
+
+            <h3>¿Qué cambió en mi última sincronización?</h3>
+            <p>En el dashboard, la tarjeta <strong>Última sincronización</strong> te muestra cuántas pólizas por vencer había antes y después, y qué pólizas cambiaron. Pulsa <span class="ui">Ver detalle</span> para ver la lista completa y abrir cada póliza.</p>
+
+            <div class="mockup">
+                <div class="sync-card">
+                    <div>
+                        <strong>Última sincronización</strong> <span class="chip g">Completada</span>
+                        <small>Sincronización · 6 oct, 10:24 · Por vencer: 15 → 12</small>
+                    </div>
+                    <div>
+                        <span class="chip g">3 pagos</span><span class="chip a">1 cambio de estatus</span><span class="chip b">2 nuevas</span>
+                    </div>
+                </div>
+                <p class="mock-caption">Pagos detectados (la fecha de próximo pago avanzó), cambios de estatus y pólizas nuevas.</p>
+            </div>
+        </section>
+
+        <!-- 07 -->
+        <section class="doc" id="resincronizar">
+            <div class="eyebrow">Cuando lo necesites</div>
+            <h2>Resincronizar <span class="hl">todo</span></h2>
+            <p class="lead"><span class="ui">Resincronizar todo</span> (botón ámbar de la extensión) abre <strong>cada</strong> póliza de tu cartera y reemplaza en GoAgent lo que muestra el portal.</p>
+
+            <div class="compare">
+                <div class="card">
+                    <span class="tag">Primera vez</span>
+                    <div class="ct">Sincronizar registros</div>
+                    <p class="cd">Carga toda tu cartera. Aparece cuando aún no tienes pólizas en GoAgent.</p>
+                </div>
+                <div class="card">
+                    <span class="tag">Uso frecuente</span>
+                    <div class="ct">Actualizar cartera</div>
+                    <p class="cd">Rápida: nuevas, próximas a vencer y cambios de estatus.</p>
+                </div>
+                <div class="card">
+                    <span class="tag">Ocasional</span>
+                    <div class="ct">Resincronizar todo</div>
+                    <p class="cd">Lenta pero completa: actualiza todos los datos de todas las pólizas.</p>
+                </div>
+            </div>
+
+            <p><strong>Úsala cuando:</strong> notes datos desactualizados (teléfono, dirección, asegurados), después de mucho tiempo sin sincronizar, o si te lo indica soporte. Puede tardar bastante con carteras grandes; puedes interrumpirla y lo capturado se guarda.</p>
+        </section>
+
+        <!-- 08 -->
+        <section class="doc" id="individual">
+            <div class="eyebrow">Atajo</div>
+            <h2>Sincronizar una <span class="hl">sola póliza</span></h2>
+            <p class="lead">Si solo quieres actualizar una póliza (por ejemplo, después de que el cliente pagó), no necesitas recorrer toda la cartera.</p>
+            <ol class="steps">
+                <li><span class="st">Abre el detalle en el portal</span><p>En la lista de pólizas del portal, entra al detalle de la póliza (página <code>DetallePoliza.aspx</code>).</p></li>
+                <li><span class="st">Pulsa «Sincronizar registro»</span><p>La extensión muestra los datos guardados de esa póliza y la actualiza (o la da de alta si es nueva).</p></li>
+            </ol>
+            <div class="callout">
+                <div class="ico">ℹ️</div>
+                <div class="body"><p>El portal no muestra el nombre del contratante en el detalle; ese dato se completa en tu siguiente sincronización desde la lista de pólizas.</p></div>
+            </div>
+        </section>
+
+        <!-- 09 -->
+        <section class="doc" id="dashboard">
+            <div class="eyebrow">GoAgent web</div>
+            <h2>El <span class="hl">dashboard</span></h2>
+            <p class="lead">En <span class="ui">Dashboard</span> está toda tu cartera, ordenada por la fecha de próximo pago: lo más urgente aparece primero.</p>
+
+            <div class="mockup">
+                <div class="stats">
+                    <div class="stat"><b class="c-blue">361</b><span>Total</span></div>
+                    <div class="stat"><b class="c-green">192</b><span>Activas</span></div>
+                    <div class="stat"><b class="c-red">169</b><span>Anuladas</span></div>
+                    <div class="stat"><b class="c-orange">12</b><span>Por vencer o fecha superada</span></div>
+                </div>
+                <p class="mock-caption">Las tarjetas también son filtros: haz clic en una para ver solo esas pólizas.</p>
+            </div>
+
+            <div class="grid">
+                <div class="card">
+                    <div class="ci">🔎</div>
+                    <div class="ct">Buscar</div>
+                    <p class="cd">Por <strong>número de póliza</strong>, o por nombre del <strong>asegurado o contratante</strong> (sin importar acentos ni mayúsculas). Presiona Enter o la lupa.</p>
+                </div>
+                <div class="card">
+                    <div class="ci">🎛️</div>
+                    <div class="ct">Filtrar</div>
+                    <p class="cd">Domiciliadas / no domiciliadas, mes de pago y <span class="ui">Ocultar anuladas</span>. Para quitar todos los filtros, haz clic en la tarjeta <strong>Total</strong>.</p>
+                </div>
+                <div class="card">
+                    <div class="ci">📄</div>
+                    <div class="ct">Detalle de póliza</div>
+                    <p class="cd">Plan, contratante, asegurados, forma y medio de cobro, próximo pago y dirección. Puedes editar teléfono y correo de contacto.</p>
+                </div>
+                <div class="card">
+                    <div class="ci">💬</div>
+                    <div class="ct">Comentarios</div>
+                    <p class="cd">Lleva una bitácora por póliza (llamadas, acuerdos, recordatorios). Las sincronizaciones nunca la borran.</p>
+                </div>
+                <div class="card">
+                    <div class="ci">👨‍👩‍👧</div>
+                    <div class="ct">Personas adicionales</div>
+                    <p class="cd">Registra familiares que no están asegurados (cónyuge, hijos…) para recordar su cumpleaños.</p>
+                </div>
+                <div class="card">
+                    <div class="ci">🔄</div>
+                    <div class="ct">Última sincronización</div>
+                    <p class="cd">Qué pólizas registraron pago, cambiaron de estatus o son nuevas en cada sincronización.</p>
+                </div>
+            </div>
+
+            <div class="callout warn">
+                <div class="ico">💡</div>
+                <div class="body">
+                    <span class="title">¿No encuentras una póliza?</span>
+                    <p>Revisa que no tengas un filtro activo (por ejemplo, después de hacer clic en «Por vencer»). Haz clic en <strong>Total</strong> y vuelve a buscar.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 10 -->
+        <section class="doc" id="calendarios">
+            <div class="eyebrow">Planificación</div>
+            <h2><span class="hl">Calendarios</span></h2>
+            <p class="lead">En el menú <span class="ui">Calendarios</span> tienes dos vistas, con lista de próximos y recientes (últimos 10 días).</p>
+            <div class="grid">
+                <div class="card">
+                    <div class="ci">🎂</div>
+                    <div class="ct">Cumpleaños</div>
+                    <p class="cd">Cumpleaños de tus asegurados y de las personas adicionales (en violeta). Ideal para felicitar a tus clientes a tiempo.</p>
+                </div>
+                <div class="card">
+                    <div class="ci">📅</div>
+                    <div class="ct">Aniversarios de pólizas</div>
+                    <p class="cd">Cada póliza cumple años en la fecha de su emisión. Muestra el próximo aniversario de cada póliza (sin las anuladas) y cuántos años cumple.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- 11 -->
+        <section class="doc" id="ajustes">
+            <div class="eyebrow">Personaliza</div>
+            <h2><span class="hl">Ajustes</span></h2>
+            <p class="lead">Con el engrane ⚙️ del dashboard ajustas los <strong>días de anticipación</strong>.</p>
+            <p>Es la ventana de días antes del vencimiento en la que una póliza se considera «próxima a vencer». Afecta la tarjeta <strong>Por vencer</strong> y qué pólizas revisa <span class="ui">Actualizar cartera</span>: entre más días, más pólizas se revisan en cada sincronización (y tarda un poco más).</p>
+        </section>
+
+        <!-- 12 -->
+        <section class="doc" id="problemas">
+            <div class="eyebrow">Ayuda</div>
+            <h2>Solución de <span class="hl">problemas</span></h2>
+            <p class="lead">Los mensajes más comunes de la extensión y qué hacer.</p>
+
+            <table class="table">
+                <thead><tr><th>Mensaje</th><th>Qué hacer</th></tr></thead>
+                <tbody>
+                    <tr><td>«La sesión activa en la extensión no coincide con la sesión de la página»</td><td>El número de asesor de tu cuenta GoAgent no es igual al «No. Asesor» del portal, o el portal tiene abierta la sesión de otro asesor. Revisa la sección <a href="#registro">Crea tu cuenta</a>.</td></tr>
+                    <tr><td>«Esta ventana no es compatible»</td><td>Abre la extensión estando en la lista de pólizas del portal (<code>PolizasAgente.aspx</code>) o en el detalle de una póliza (<code>DetallePoliza.aspx</code>).</td></tr>
+                    <tr><td>«Necesitas una suscripción activa para sincronizar tu cartera»</td><td>Activa tu prueba gratis o suscríbete en <a href="https://www.goagent.com.mx/pricing">Precios</a>.</td></tr>
+                    <tr><td>«El portal de Seguros Monterrey respondió con errores…»</td><td>El portal está lento o fallando. Lo capturado se guardó; intenta de nuevo en unos minutos y verifica que la lista de pólizas no tenga filtros de búsqueda activos.</td></tr>
+                    <tr><td>«No se pudieron sincronizar N póliza(s)»</td><td>Se reintentan en la siguiente sincronización. También puedes abrir su detalle en el portal y usar <span class="ui">Sincronizar registro</span>.</td></tr>
+                    <tr><td>No veo una póliza en el dashboard</td><td>Quita los filtros (tarjeta <strong>Total</strong>) y búscala por número. Si sigue sin aparecer, sincronízala desde su detalle en el portal.</td></tr>
+                    <tr><td>Olvidé mi contraseña</td><td>Usa <span class="ui">Olvidé mi contraseña</span> en la web o en la extensión; te llegará un correo para restablecerla.</td></tr>
+                </tbody>
+            </table>
+
+            <div class="callout ok">
+                <div class="ico">🤝</div>
+                <div class="body">
+                    <span class="title">¿Necesitas ayuda?</span>
+                    <p>Escríbenos desde la página de <a href="https://www.goagent.com.mx/support">Soporte</a> de GoAgent.</p>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <strong><span style="color: var(--primary);">Go</span>Agent</strong> · Manual de uso · www.goagent.com.mx
+        </footer>
+    </main>
+</div>
+
+<script>
+    // Resalta en el indice la seccion visible.
+    (function () {
+        var links = document.querySelectorAll('#toc a');
+        var byId = {};
+        links.forEach(function (a) { byId[a.getAttribute('href').slice(1)] = a; });
+        if (!('IntersectionObserver' in window)) return;
+        var observer = new IntersectionObserver(function (entries) {
+            entries.forEach(function (entry) {
+                if (!entry.isIntersecting) return;
+                links.forEach(function (a) { a.classList.remove('active'); });
+                var link = byId[entry.target.id];
+                if (link) link.classList.add('active');
+            });
+        }, { rootMargin: '-20% 0px -70% 0px' });
+        document.querySelectorAll('section.doc').forEach(function (s) { observer.observe(s); });
+    })();
+</script>
+</body>
+</html>

@@ -172,6 +172,15 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
                 <Icon iconName="Slideshow" size={16} />
                 <span>Presentación GoAgent</span>
               </DocsLink>
+              <DocsLink
+                href="/manual-goagent.html"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setDocsOpen(false)}
+              >
+                <Icon iconName="MenuBook" size={16} />
+                <span>Manual de uso</span>
+              </DocsLink>
             </DocsDropdown>
           )}
         </DocsWrapper>
@@ -381,6 +390,16 @@ const Header: React.FC<HeaderProps> = ({ userType = "Admin" }) => {
             >
               <Icon iconName="Slideshow" size={18} />
               <span>Presentación GoAgent</span>
+            </DrawerExternalLink>
+
+            <DrawerExternalLink
+              href="/manual-goagent.html"
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => setMenuOpen(false)}
+            >
+              <Icon iconName="MenuBook" size={18} />
+              <span>Manual de uso</span>
             </DrawerExternalLink>
 
             {isAuthenticated ? (
