@@ -1171,13 +1171,17 @@ func ApiPutPoliza(w http.ResponseWriter, r *http.Request) {
 	polizaID := int64(existing.PolizaID)
 	// next_payment antes del resync, para detectar pagos (ver sync_runs.go).
 	oldNext, _ := deps.SyncRepo.GetNextPayment(r.Context(), polizaID)
-	if tipoPoliza == "FLEXIBLE" {
+	switch {
+	case item.Estatus == "Anulada":
+		// Una Anulada no tiene recibos pendientes ("sin_pendientes") y el recalculo
+		// desde fecha_emision avanzaria next_payment como si hubiera un pago.
+	case tipoPoliza == "FLEXIBLE":
 		if err := syncFlexiblePoliza(r.Context(), polizaID, item.FormaPago, item.DiaCobro, fechaEmision, item.Flexible); err != nil {
 			services.Log.ErrorMessage(err.Error())
 			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
 			return
 		}
-	} else {
+	default:
 		if err := syncTradicionalUltimoPago(r.Context(), polizaID, item.UltimoPago, item.SinPendientes); err != nil {
 			services.Log.ErrorMessage(err.Error())
 			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
