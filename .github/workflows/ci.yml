@@ -1,0 +1,116 @@
+# CI/CD de los tres componentes.
+#   PR a dev/main     -> solo checks (server, front, extension)
+#   push a dev        -> checks + deploy a STAGING (migraciones, Railway, Vercel)
+#   push a main       -> checks + deploy a PRODUCCION (espera aprobacion manual
+#                        en el GitHub Environment "prod")
+# Railway y Vercel tienen el auto-deploy por Git apagado: solo despliega este workflow.
+name: CI/CD
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+    branches: [dev, main]
+  workflow_dispatch:
+
+concurrency:
+  group: cicd-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webscrapper_server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: webscrapper_server/go.mod
+          cache-dependency-path: webscrapper_server/go.sum
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./...
+
+  front:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webscrapper_front
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: webscrapper_front/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  extension:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: webscrapper_extension
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: webscrapper_extension/package-lock.json
+      - run: npm ci
+      # dev -> extension apuntando a staging; main -> produccion.
+      - run: npm run ${{ github.ref_name == 'dev' && 'build:staging' || 'build' }}
+      - if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: goagent-extension-${{ github.ref_name }}-${{ github.sha }}
+          path: webscrapper_extension/dist/
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: [server, front, extension]
+    runs-on: ubuntu-latest
+    # "staging" y "prod" son GitHub Environments; cada uno tiene sus secrets
+    # (DB_URL, RAILWAY_TOKEN) y "prod" exige aprobacion manual.
+    environment: ${{ github.ref_name == 'main' && 'prod' || 'staging' }}
+    env:
+      IS_PROD: ${{ github.ref_name == 'main' }}
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Migraciones
+        env:
+          DB_URL: ${{ secrets.DB_URL }}
+        run: |
+          curl -sSL https://github.com/golang-migrate/migrate/releases/download/v4.18.3/migrate.linux-amd64.tar.gz | tar xz migrate
+          ./migrate -path webscrapper_server/migrations -database "$DB_URL" up
+
+      # RAILWAY_TOKEN es token de proyecto: ya fija proyecto y entorno.
+      - name: Server -> Railway
+        run: |
+          npm i -g @railway/cli
+          railway up --ci --service ${{ vars.RAILWAY_SERVICE_ID }}
+
+      - name: Front -> Vercel
+        run: |
+          npm i -g vercel
+          if [ "$IS_PROD" = "true" ]; then
+            vercel pull --yes --environment=production --token "$VERCEL_TOKEN"
+            vercel build --prod --token "$VERCEL_TOKEN"
+            vercel deploy --prebuilt --prod --token "$VERCEL_TOKEN"
+          else
+            vercel pull --yes --environment=preview --git-branch=dev --token "$VERCEL_TOKEN"
+            vercel build --token "$VERCEL_TOKEN"
+            # staging.goagent.com.mx esta ligado a la rama dev en Vercel y se asigna solo.
+            vercel deploy --prebuilt --token "$VERCEL_TOKEN"
+          fi

@@ -9,7 +9,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const isWatch = process.argv.includes("--watch");
 const isLocal = process.argv.includes("--local");
-const mode = isLocal ? "development" : "production";
+const isStaging = process.argv.includes("--staging");
+const mode = isLocal ? "development" : isStaging ? "staging" : "production";
 
 console.log(`Building in "${mode}" mode (.env.${mode})`);
 
@@ -31,7 +32,7 @@ const popupConfig = {
   // En modo lib Vite no reemplaza process.env.NODE_ENV, y React lo usa para
   // elegir su build de desarrollo/produccion.
   define: {
-    "process.env.NODE_ENV": JSON.stringify(mode),
+    "process.env.NODE_ENV": JSON.stringify(isLocal ? "development" : "production"),
   },
   build: {
     outDir: "dist",
