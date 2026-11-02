@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"slices"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/omaradriano/cobranzawebscrapper_server/db"
+	"github.com/omaradriano/cobranzawebscrapper_server/env"
 	"github.com/omaradriano/cobranzawebscrapper_server/internal/dto"
 	"github.com/omaradriano/cobranzawebscrapper_server/internal/middlewares"
 	"golang.org/x/crypto/bcrypt"
@@ -137,31 +139,37 @@ func EnableCORS(next http.Handler) http.Handler {
 	return CORSMiddleware(next)
 }
 
-var allowedOrigins = map[string]bool{
-	"http://localhost:5173":                               true,
-	"http://localhost:5174":                               true,
-	"https://www.goagent.com.mx":                          true,
-	"https://goagent.com.mx":                              true,
-	"https://staging.goagent.com.mx":                      true,
-	"chrome-extension://bnhggcmlbinhmheijhmlfjoefgldkpdp": true,
-	"chrome-extension://jgahlmealgaocieaemladngafmbbfgdo": true,
-	"chrome-extension://acihafkligkgjbhmbgaidkackhojbokh": true,
+// Origenes permitidos por ambiente (MODE). Las extensiones van en todos: la
+// misma extension (tienda o sin empaquetar) puede apuntar a cualquier ambiente.
+var extensionOrigins = []string{
+	"chrome-extension://bnhggcmlbinhmheijhmlfjoefgldkpdp",
+	"chrome-extension://jgahlmealgaocieaemladngafmbbfgdo",
+	"chrome-extension://acihafkligkgjbhmbgaidkackhojbokh",
 }
 
-// vercelOriginRe acepta los despliegues del frontend en Vercel (preview),
-// cuya URL cambia en cada deploy: alias de rama (-git-dev-) y URLs por
+var webOriginsByMode = map[string][]string{
+	"dev":     {"http://localhost:5173", "http://localhost:5174"},
+	"staging": {"https://staging.goagent.com.mx"},
+	"prod":    {"https://www.goagent.com.mx", "https://goagent.com.mx"},
+}
+
+// vercelOriginRe acepta (solo en staging) los despliegues preview del front en
+// Vercel, cuya URL cambia en cada deploy: alias de rama (-git-dev-) y URLs por
 // despliegue (-mf6izhav7-). Limitado al scope del equipo omaradrianos-projects.
 var vercelOriginRe = regexp.MustCompile(`^https://cobranzas?webscrapper-front-[a-z0-9-]+-omaradrianos-projects\.vercel\.app$`)
 
-func isAllowedOrigin(origin string) bool {
-	return allowedOrigins[origin] || vercelOriginRe.MatchString(origin)
+func isAllowedOrigin(mode, origin string) bool {
+	if slices.Contains(extensionOrigins, origin) || slices.Contains(webOriginsByMode[mode], origin) {
+		return true
+	}
+	return mode == "staging" && vercelOriginRe.MatchString(origin)
 }
 
 func CORSMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		origin := r.Header.Get("Origin")
 
-		if isAllowedOrigin(origin) {
+		if isAllowedOrigin(env.Envs.Mode, origin) {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Vary", "Origin")
 		}

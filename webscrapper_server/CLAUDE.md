@@ -72,5 +72,5 @@ Schema lives in `migrations/` (golang-migrate, numbered `NNNNNN_name.up.sql`/`.d
 
 ## Notes
 
-- CORS allowed origins are hardcoded in `internal/services/responseHandling.go`: `localhost:5173`, `goagent.com.mx`, and two Chrome extension IDs.
+- CORS allowed origins are hardcoded per `MODE` in `internal/services/responseHandling.go` (`webOriginsByMode`): dev = localhost:5173/5174, staging = staging.goagent.com.mx + Vercel preview URLs, prod = goagent.com.mx/www. Chrome extension IDs are allowed in every mode.
 - `go.mod` references both `stripe-go/v74` and `stripe-go/v76` — handlers use v76.
