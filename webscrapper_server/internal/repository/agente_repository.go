@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/omaradriano/cobranzawebscrapper_server/internal/models"
@@ -13,6 +14,7 @@ type AgenteRepository interface {
 	FindByEmailWithInsurance(ctx context.Context, email string) (*models.Agente, *models.AseguradoraConf, error)
 	FindByUUID(ctx context.Context, uuid string) (*models.Agente, error)
 	FindIDByUUID(ctx context.Context, uuid string) (int, error)
+	FindAseguradoraID(ctx context.Context, agenteID int) (int, error)
 	FindPasswordByEmail(ctx context.Context, email string) (*string, error)
 	Create(ctx context.Context, agente *models.Agente) error
 	UpdateResetToken(ctx context.Context, email string, token string, expires time.Time) error
@@ -71,6 +73,21 @@ func (r *agenteRepository) FindIDByUUID(ctx context.Context, uuid string) (int, 
 		return 0, err
 	}
 	return agente.AgenteID, nil
+}
+
+// FindAseguradoraID devuelve la aseguradora del agente. Las rutas de captura
+// actuales solo las usa la extension de Seguros Monterrey, asi que la poliza
+// toma la aseguradora del agente.
+func (r *agenteRepository) FindAseguradoraID(ctx context.Context, agenteID int) (int, error) {
+	var id *int
+	err := r.db.WithContext(ctx).Model(&models.Agente{}).Select("aseguradora_id").Where("agente_id = ?", agenteID).Scan(&id).Error
+	if err != nil {
+		return 0, err
+	}
+	if id == nil {
+		return 0, fmt.Errorf("el agente %d no tiene aseguradora asignada", agenteID)
+	}
+	return *id, nil
 }
 
 func (r *agenteRepository) FindPasswordByEmail(ctx context.Context, email string) (*string, error) {

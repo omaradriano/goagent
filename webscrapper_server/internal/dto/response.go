@@ -41,6 +41,10 @@ type GetItem_Poliza struct {
 	// Vacio si la poliza aun no se resincroniza desde que se guarda.
 	Contratante string `json:"contratante"`
 
+	// Estatus canonico de cobranza; Estatus conserva el texto del portal.
+	Vigente     bool   `json:"vigente"`
+	Aseguradora string `json:"aseguradora"`
+
 	Flexible *GetItem_PolizaFlexible `json:"flexible,omitempty"`
 }
 

@@ -39,7 +39,6 @@ type PolizaRepository interface {
 	GetNumPolizasByAgenteUUID(ctx context.Context, uuid string) ([]string, error)
 	BulkCreate(ctx context.Context, polizas []models.Poliza, asegurados [][]models.Asegurado) ([]int64, []string, error)
 	CreateSingle(ctx context.Context, poliza *models.Poliza) error
-	FindPolizaIDByNumPoliza(ctx context.Context, numPoliza string) (int, error)
 	GetPolizaWithAsegurados(ctx context.Context, numPoliza string, agenteID int) (*models.Poliza, error)
 	GetBirthdates(ctx context.Context, agenteID int) ([]BirthdateResult, error)
 	GetAnniversaries(ctx context.Context, agenteID int) ([]AnniversaryResult, error)
@@ -119,15 +118,6 @@ func (r *polizaRepository) BulkCreate(ctx context.Context, polizas []models.Poli
 
 func (r *polizaRepository) CreateSingle(ctx context.Context, poliza *models.Poliza) error {
 	return r.db.WithContext(ctx).Create(poliza).Error
-}
-
-func (r *polizaRepository) FindPolizaIDByNumPoliza(ctx context.Context, numPoliza string) (int, error) {
-	var poliza models.Poliza
-	err := r.db.WithContext(ctx).Select("poliza_id").Where("numpoliza = ?", numPoliza).First(&poliza).Error
-	if err != nil {
-		return 0, err
-	}
-	return poliza.PolizaID, nil
 }
 
 func (r *polizaRepository) GetPolizaWithAsegurados(ctx context.Context, numPoliza string, agenteID int) (*models.Poliza, error) {
@@ -309,7 +299,7 @@ func (r *polizaRepository) GetResyncCandidateNums(ctx context.Context, agenteID 
 		JOIN agentes a ON p.agente_id = a.agente_id
 		JOIN polizas_payments_conf ppc ON p.poliza_id = ppc.poliza_id
 		WHERE a.agente_id = ?
-		  AND p.estatus != 'Anulada'
+		  AND p.vigente
 		  AND ppc.next_payment <= CURRENT_DATE + %s`, NextDueWindowSQL), agenteID).
 		Scan(&nums).Error
 	return nums, err
@@ -418,7 +408,7 @@ func (r *polizaRepository) GetAnniversaries(ctx context.Context, agenteID int) (
 		         ORDER BY a.is_principal IS TRUE DESC, a.asegurado_id ASC
 		         LIMIT 1) AS asegurado
 		    FROM polizas p
-		    WHERE p.agente_id = ? AND p.estatus != 'Anulada'
+		    WHERE p.agente_id = ? AND p.vigente
 		),
 		calc AS (
 		    SELECT e.*, v.inicio,

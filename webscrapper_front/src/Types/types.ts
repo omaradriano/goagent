@@ -3,7 +3,10 @@ import * as MuiIcons from "@mui/icons-material";
 
 export type PolizaGetItem = {
   diaCobro: number;
-  estatus: StatusValues;
+  // Texto del portal (ej. "Vigor Prorrogado"); el color sale de `vigente`.
+  estatus: string;
+  vigente: boolean;
+  aseguradora: string;
   fecha_emision: string;
   forma_pago: string;
   medio_cobro: string;

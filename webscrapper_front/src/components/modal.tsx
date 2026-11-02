@@ -205,7 +205,7 @@ const Modal: React.FC<ModalProps> = ({
                       ? "Flexible"
                       : "Tradicional"}
                   </TipoPolizaBadge>
-                  <StatusBadge $type={polizaData.estatus}>
+                  <StatusBadge $type={polizaData.vigente ? "En Vigor" : "Anulada"}>
                     {polizaData.estatus}
                   </StatusBadge>
                   <CloseBtn onClick={() => setModalOpen(false)}>
@@ -243,12 +243,14 @@ const Modal: React.FC<ModalProps> = ({
                     </MetaItem>
                     <MetaItem>
                       <MetaLabel>Estatus</MetaLabel>
-                      <EstatusDisplay $active={polizaData.estatus === "En Vigor"}>
-                        <EstatusIndicator
-                          $active={polizaData.estatus === "En Vigor"}
-                        />
+                      <EstatusDisplay $active={polizaData.vigente}>
+                        <EstatusIndicator $active={polizaData.vigente} />
                         <span>{polizaData.estatus}</span>
                       </EstatusDisplay>
+                    </MetaItem>
+                    <MetaItem>
+                      <MetaLabel>Aseguradora</MetaLabel>
+                      <MetaValue>{polizaData.aseguradora}</MetaValue>
                     </MetaItem>
                   </SectionMeta>
                 </CounterSection>

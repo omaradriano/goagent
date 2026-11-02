@@ -111,7 +111,14 @@ func ApiAuthenticateUserByGoogle(w http.ResponseWriter, r *http.Request) {
 
 	if !found {
 		tempNoAgente := fmt.Sprintf("G-%04d", time.Now().UnixNano()%10000)
-		aseguradoraID := int64(1)
+		// El alta por Google asigna Seguros Monterrey (por clave, no por id).
+		var sm models.AseguradoraConf
+		if err := deps.DB.WithContext(r.Context()).Where("clave = ?", "SM").First(&sm).Error; err != nil {
+			services.Log.ErrorMessage(err.Error())
+			services.HandleResponseError(http.StatusInternalServerError, "No se encontro la aseguradora por defecto", w)
+			return
+		}
+		aseguradoraID := int64(sm.AseguradoraID)
 		newAgente := &models.Agente{
 			Email:         googleUserResponse.Email,
 			IsVerified:    true,
@@ -128,7 +135,7 @@ func ApiAuthenticateUserByGoogle(w http.ResponseWriter, r *http.Request) {
 
 		ServerResponse.JWT_Token, err = services.GenerateJWT(
 			newAgente.AgenteUUID.String(), ServerResponse.Email,
-			newAgente.NoAgente, newAgente.Role, "Por asignar", "1",
+			newAgente.NoAgente, newAgente.Role, "Por asignar", strconv.Itoa(sm.AseguradoraID),
 		)
 		if err != nil {
 			services.HandleResponseError(http.StatusInternalServerError, "Error al obtener jwt token para nuevo usuario", w)

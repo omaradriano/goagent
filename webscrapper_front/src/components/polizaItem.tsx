@@ -1,5 +1,5 @@
 import React from "react";
-import type { PolizaGetItem, StatusValues, viewMode } from "../Types/types";
+import type { PolizaGetItem, viewMode } from "../Types/types";
 import styled from "styled-components";
 // import ScrollCheckbox from "./checkboxscroll";
 import {
@@ -79,7 +79,7 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
             )}
           </div>
           <PolizaItemFooter>
-            <SpanCard title={data.estatus}></SpanCard>
+            <SpanCard title={data.estatus} vigente={data.vigente} />
             <Button
               action={() => {
                 setPolizaData(data);
@@ -104,7 +104,7 @@ const PolizaItem: React.FC<PolizaItemProps> = ({
           </p>
           <p>{data.tipo_seguro}</p>
           <div>
-            <SpanCard title={data.estatus as StatusValues} />
+            <SpanCard title={data.estatus} vigente={data.vigente} />
           </div>
           <NotificationDiv>
             <CounterCard

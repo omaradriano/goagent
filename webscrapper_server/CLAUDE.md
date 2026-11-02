@@ -68,6 +68,8 @@ All variables are required (see `env/envconf.go`):
 
 Schema lives in `migrations/` (golang-migrate, numbered `NNNNNN_name.up.sql`/`.down.sql`); the current schema is the result of applying them in order. Never edit an already-applied migration — add a new one. Data access mixes GORM (`internal/repository/`) and raw SQL in handlers. The main tables are `agentes` (users) and `polizas` (insurance policies).
 
+Multi-aseguradora (migration 20): `polizas.aseguradora_id` (unique `(aseguradora_id, numpoliza)`), `polizas.vigente` is the canonical billing status (set in Go by `esVigente`; `polizas.estatus` keeps the portal text because the extension compares it during resync), and `agente_aseguradoras` holds one agent key per insurer (kept in sync from `agentes.no_agente`/`aseguradora_id` by a trigger). Use `vigente`, never estatus text, in queries.
+
 `polizas_payments_conf.next_payment` is set only by the extension sync (pending receipt date, or `fn__set_next_payment` from `fecha_emision`/`dia_cobro` when there are no pending receipts) and by the `trg_after_insert` trigger on new policies. There is no manual payment logging or manual `dia_cobro`/`forma_pago` editing.
 
 ## Notes
