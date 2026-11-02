@@ -3,19 +3,20 @@ import styled from "styled-components";
 import type { StatusValues } from "../Types/types";
 
 export interface SpanCardProps {
-  title: StatusValues;
+  title: string;
+  vigente: boolean;
 }
 
-const SpanCard: React.FC<SpanCardProps> = ({ title }) => {
+const SpanCard: React.FC<SpanCardProps> = ({ title, vigente }) => {
   return (
-    <SpanCardCustom $type={title}>
+    <SpanCardCustom $type={vigente ? "En Vigor" : "Anulada"}>
       <p>{title}</p>
     </SpanCardCustom>
   );
 };
 
-// Pildora de estatus (estilo de la presentacion): verde para "En Vigor",
-// roja para "Anulada".
+// Pildora de estatus (estilo de la presentacion): verde si la poliza esta
+// vigente, roja si esta anulada; el texto es el estatus del portal.
 const SpanCardCustom = styled.div<{
   $type: StatusValues;
 }>`

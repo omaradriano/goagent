@@ -33,6 +33,8 @@ type Poliza struct {
 	Comentario       *string    `gorm:"column:comentario" json:"comentario"`
 	Contratante      *string    `gorm:"column:contratante;size:150" json:"contratante"`
 	AgenteID         *int64     `gorm:"column:agente_id" json:"-"`
+	AseguradoraID    int        `gorm:"column:aseguradora_id;not null" json:"-"`
+	Vigente          bool       `gorm:"column:vigente;not null" json:"vigente"`
 
 	Agente            *Agente                  `gorm:"foreignKey:AgenteID" json:"agente,omitempty"`
 	Asegurados        []Asegurado              `gorm:"foreignKey:PolizaID" json:"asegurados,omitempty"`

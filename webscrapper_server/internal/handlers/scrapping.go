@@ -64,6 +64,13 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	aseguradoraID, err := deps.AgenteRepo.FindAseguradoraID(r.Context(), agenteID)
+	if err != nil {
+		services.Log.ErrorMessage(err.Error())
+		services.HandleResponseError(http.StatusBadRequest, "El agente no tiene aseguradora asignada", w)
+		return
+	}
+
 	existingNums, err := deps.PolizaRepo.GetNumPolizasByAgenteUUID(r.Context(), agenteUUID)
 	if err != nil {
 		services.HandleResponseError(http.StatusInternalServerError, "Ha ocurrido un error", w)
@@ -102,7 +109,7 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	const colsPerItem = 21
+	const colsPerItem = 23
 	var placeholders []string
 	var args []any
 
@@ -124,7 +131,7 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 			item.NumPoliza, item.Plan, item.TipoSeguro, item.Direccion.Calle, item.Direccion.CodigoPostal,
 			item.Direccion.Ciudad, item.Direccion.Colonia, item.Direccion.Estado, item.Moneda,
 			item.Telefono, item.SumaAsegurada, item.Email, item.Pais, agenteID, tipoPoliza,
-			contratanteValue(item.Contratante, item.NumPoliza),
+			contratanteValue(item.Contratante, item.NumPoliza), aseguradoraID, esVigente(item.Estatus),
 		)
 	}
 
@@ -132,7 +139,7 @@ func ApiPostPolizas(w http.ResponseWriter, r *http.Request) {
 		dia_cobro, estatus, fecha_emision, forma_pago, medio_cobro, numpoliza, plan,
 		tipo_seguro, addr_calle, addr_codigopostal, addr_ciudad, addr_colonia,
 		addr_estado, moneda, telefono, suma_asegurada, email, pais, agente_id, tipo_poliza,
-		contratante
+		contratante, aseguradora_id, vigente
 	) VALUES `
 	finalQuery := queryStart + strings.Join(placeholders, ",") + " RETURNING poliza_id, numpoliza"
 
@@ -375,6 +382,13 @@ func ApiPostPoliza(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	aseguradoraID, err := deps.AgenteRepo.FindAseguradoraID(r.Context(), agenteID)
+	if err != nil {
+		services.Log.ErrorMessage(err.Error())
+		services.HandleResponseError(http.StatusBadRequest, "El agente no tiene aseguradora asignada", w)
+		return
+	}
+
 	aid := int64(agenteID)
 	fechaEmision, _ := time.Parse("2006-01-02", item.FechaEmision)
 	tipoPoliza := item.TipoPoliza
@@ -403,6 +417,8 @@ func ApiPostPoliza(w http.ResponseWriter, r *http.Request) {
 		TipoPoliza:       tipoPoliza,
 		Contratante:      contratanteValue(item.Contratante, item.NumPoliza),
 		AgenteID:         &aid,
+		AseguradoraID:    aseguradoraID,
+		Vigente:          esVigente(item.Estatus),
 	}
 
 	err = deps.PolizaRepo.CreateSingle(r.Context(), poliza)
@@ -494,6 +510,7 @@ func ApiPatchPoliza(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		fields["estatus"] = est
+		fields["vigente"] = esVigente(est)
 	}
 
 	// Compatibilidad con clientes previos a la bitacora: "comentario" ya no
@@ -553,12 +570,12 @@ func ApiGetDetails(w http.ResponseWriter, r *http.Request) {
 	err := deps.DB.WithContext(r.Context()).Raw(fmt.Sprintf(`
 		SELECT
 			COALESCE(COUNT(*), 0) as total,
-			COALESCE(COUNT(CASE WHEN p.estatus = 'En Vigor' THEN 1 END), 0) as activas,
-			COALESCE(COUNT(CASE WHEN p.estatus != 'En Vigor' THEN 1 END), 0) as inactivas,
+			COALESCE(COUNT(CASE WHEN p.vigente THEN 1 END), 0) as activas,
+			COALESCE(COUNT(CASE WHEN NOT p.vigente THEN 1 END), 0) as inactivas,
 			COALESCE(COUNT(CASE WHEN %s THEN 1 END), 0) as por_vencer
 		FROM polizas p
 		JOIN agentes a ON p.agente_id = a.agente_id
-		JOIN polizas_payments_conf ppc ON p.poliza_id = ppc.poliza_id
+		LEFT JOIN polizas_payments_conf ppc ON p.poliza_id = ppc.poliza_id
 		WHERE a.agente_uuid = ?`, repository.PorVencerConditionSQL), userUUID).
 		Scan(&details).Error
 	if err != nil {
@@ -604,6 +621,7 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 
 	var cobranza dto.GetItem_Poliza
 	var polizaID int
+	var siguientePago *string // NULL si la poliza no tiene fila en polizas_payments_conf
 
 	err = deps.DB.WithContext(r.Context()).Raw(`
 		SELECT p.poliza_uuid, p.dia_cobro, p.estatus, p.fecha_emision, p.forma_pago, p.medio_cobro,
@@ -617,18 +635,22 @@ func ApiGetPoliza(w http.ResponseWriter, r *http.Request) {
 				SELECT c.contenido FROM polizas_comentarios c
 				WHERE c.poliza_id = p.poliza_id AND c.deleted_at IS NULL
 				ORDER BY c.created_at DESC, c.comentario_id DESC LIMIT 1
-			), '')
+			), ''), p.vigente, ac.nombre
 		FROM polizas p
-		JOIN polizas_payments_conf ppc ON p.poliza_id = ppc.poliza_id
+		LEFT JOIN polizas_payments_conf ppc ON p.poliza_id = ppc.poliza_id
 		JOIN agentes a ON p.agente_id = a.agente_id
+		JOIN aseguradoras_conf ac ON ac.aseguradora_id = p.aseguradora_id
 		WHERE p.numpoliza = ? AND a.agente_id = ?`, polizaNum, agenteID).
 		Row().Scan(&cobranza.PolizaUUID, &cobranza.DiaCobro,
 		&cobranza.Estatus, &cobranza.FechaEmision, &cobranza.FormaPago, &cobranza.MedioCobro,
 		&cobranza.NumPoliza, &cobranza.Plan, &cobranza.TipoSeguro,
 		&cobranza.Direccion.Calle, &cobranza.Direccion.CodigoPostal, &cobranza.Direccion.Ciudad,
 		&cobranza.Direccion.Colonia, &cobranza.Direccion.Estado, &cobranza.Moneda, &cobranza.Pais,
-		&cobranza.Email, &cobranza.Telefono, &cobranza.SiguientePago, &polizaID, &cobranza.TipoPoliza,
-		&cobranza.Contratante, &cobranza.Comentario)
+		&cobranza.Email, &cobranza.Telefono, &siguientePago, &polizaID, &cobranza.TipoPoliza,
+		&cobranza.Contratante, &cobranza.Comentario, &cobranza.Vigente, &cobranza.Aseguradora)
+	if siguientePago != nil {
+		cobranza.SiguientePago = *siguientePago
+	}
 	if err != nil {
 		if err == gorm.ErrRecordNotFound {
 			services.HandleResponseError(http.StatusNotFound, "La poliza no está registrada", w)
@@ -770,7 +792,8 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 
 	joinClause := ` FROM polizas p
 		JOIN agentes a ON p.agente_id = a.agente_id
-		JOIN polizas_payments_conf ppc ON ppc.poliza_id=p.poliza_id`
+		LEFT JOIN polizas_payments_conf ppc ON ppc.poliza_id=p.poliza_id
+		JOIN aseguradoras_conf ac ON ac.aseguradora_id = p.aseguradora_id`
 
 	baseQuery := joinClause + ` WHERE a.agente_id=$1`
 
@@ -800,6 +823,11 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 				baseQuery += fmt.Sprintf(" AND ppc.next_payment < $%d", argCount)
 				args = append(args, monthEnd)
 			}
+		} else if columna == "estatus" {
+			// El front filtra por "En Vigor"/"Anulada"; se traduce al estatus canonico.
+			argCount++
+			baseQuery += fmt.Sprintf(" AND p.vigente=$%d", argCount)
+			args = append(args, esVigente(valor))
 		} else if columna == "numpoliza" {
 			argCount++
 			baseQuery += fmt.Sprintf(" AND p.numpoliza ILIKE $%d", argCount)
@@ -852,7 +880,7 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 				SELECT c.contenido FROM polizas_comentarios c
 				WHERE c.poliza_id = p.poliza_id AND c.deleted_at IS NULL
 				ORDER BY c.created_at DESC, c.comentario_id DESC LIMIT 1
-			), ''), COALESCE(p.contratante, '')` + baseQuery
+			), ''), COALESCE(p.contratante, ''), p.vigente, ac.nombre` + baseQuery
 
 	orderBy := `ppc.next_payment ASC`
 	if recent {
@@ -875,14 +903,18 @@ func ApiGetPolizas(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var poliza dto.GetItem_Poliza
 		var dbPolizaID int
+		var siguientePago *string
 
 		err := rows.Scan(
 			&dbPolizaID, &poliza.DiaCobro, &poliza.Estatus, &poliza.FechaEmision, &poliza.FormaPago, &poliza.MedioCobro, &poliza.NumPoliza,
 			&poliza.Plan, &poliza.TipoSeguro, &poliza.Direccion.Calle, &poliza.Direccion.CodigoPostal, &poliza.Direccion.Ciudad,
-			&poliza.Direccion.Colonia, &poliza.Direccion.Estado, &poliza.SiguientePago, &poliza.Moneda, &poliza.Pais,
+			&poliza.Direccion.Colonia, &poliza.Direccion.Estado, &siguientePago, &poliza.Moneda, &poliza.Pais,
 			&poliza.Telefono, &poliza.Email, &poliza.SumaAsegurada, &poliza.UltimaModificacion, &poliza.PolizaUUID,
-			&poliza.TipoPoliza, &poliza.Comentario, &poliza.Contratante,
+			&poliza.TipoPoliza, &poliza.Comentario, &poliza.Contratante, &poliza.Vigente, &poliza.Aseguradora,
 		)
+		if siguientePago != nil {
+			poliza.SiguientePago = *siguientePago
+		}
 		if err != nil {
 			rows.Close()
 			services.HandleResponseError(http.StatusInternalServerError, err.Error(), w)
@@ -1133,6 +1165,7 @@ func ApiPutPoliza(w http.ResponseWriter, r *http.Request) {
 		"email":             item.Email,
 		"pais":              item.Pais,
 		"tipo_poliza":       tipoPoliza,
+		"vigente":           esVigente(item.Estatus),
 	}
 	// Si el scrape no trae contratante no se borra el que ya estaba guardado.
 	if c := contratanteValue(item.Contratante, item.NumPoliza); c != nil {
@@ -1172,7 +1205,7 @@ func ApiPutPoliza(w http.ResponseWriter, r *http.Request) {
 	// next_payment antes del resync, para detectar pagos (ver sync_runs.go).
 	oldNext, _ := deps.SyncRepo.GetNextPayment(r.Context(), polizaID)
 	switch {
-	case item.Estatus == "Anulada":
+	case !esVigente(item.Estatus):
 		// Una Anulada no tiene recibos pendientes ("sin_pendientes") y el recalculo
 		// desde fecha_emision avanzaria next_payment como si hubiera un pago.
 	case tipoPoliza == "FLEXIBLE":
@@ -1262,6 +1295,14 @@ func ApiGetResyncEstatus(w http.ResponseWriter, r *http.Request) {
 // translate en lugar de la extension unaccent para no depender de ella.
 func normalizeNameSQL(expr string) string {
 	return fmt.Sprintf("translate(lower(%s), 'áéíóúüàèìòù', 'aeiouuaeiou')", expr)
+}
+
+// esVigente traduce el estatus del portal al estatus canonico de cobranza.
+// shortcut: solo existe la regla de Seguros Monterrey (todo lo que no es
+// "Anulada" se cobra); pasar a una regla por aseguradora con el primer
+// conector que use otros textos.
+func esVigente(estatus string) bool {
+	return !strings.EqualFold(strings.TrimSpace(estatus), "Anulada")
 }
 
 // contratanteValue limpia el contratante recibido de la extension. El

@@ -14,7 +14,7 @@ import (
 // PorVencerConditionSQL es el criterio del contador "Por vencer" del
 // dashboard (ApiGetDetails). Requiere JOIN a "agentes a" y
 // "polizas_payments_conf ppc".
-const PorVencerConditionSQL = "ppc.next_payment <= CURRENT_DATE + " + NextDueWindowSQL + " AND p.estatus != 'Anulada'"
+const PorVencerConditionSQL = "ppc.next_payment <= CURRENT_DATE + " + NextDueWindowSQL + " AND p.vigente"
 
 // porVencerCountSQL cuenta las polizas por vencer de un agente (?).
 var porVencerCountSQL = fmt.Sprintf(`(
