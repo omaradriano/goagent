@@ -112,5 +112,5 @@ jobs:
             vercel pull --yes --environment=preview --git-branch=dev --token "$VERCEL_TOKEN"
             vercel build --token "$VERCEL_TOKEN"
             url=$(vercel deploy --prebuilt --format json --token "$VERCEL_TOKEN" | jq -r .deployment.url)
-            vercel alias set "$url" staging.goagent.com.mx --token "$VERCEL_TOKEN"
+            vercel alias set "$url" staging.goagent.com.mx --scope "$VERCEL_ORG_ID" --token "$VERCEL_TOKEN"
           fi
