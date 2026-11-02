@@ -142,13 +142,14 @@ var allowedOrigins = map[string]bool{
 	"http://localhost:5174":                               true,
 	"https://www.goagent.com.mx":                          true,
 	"https://goagent.com.mx":                              true,
+	"https://staging.goagent.com.mx":                      true,
 	"chrome-extension://bnhggcmlbinhmheijhmlfjoefgldkpdp": true,
 	"chrome-extension://jgahlmealgaocieaemladngafmbbfgdo": true,
 	"chrome-extension://acihafkligkgjbhmbgaidkackhojbokh": true,
 }
 
-// vercelOriginRe acepta los despliegues del frontend en Vercel (QA/preview),
-// cuya URL cambia en cada deploy: alias de rama (-git-qa-) y URLs por
+// vercelOriginRe acepta los despliegues del frontend en Vercel (preview),
+// cuya URL cambia en cada deploy: alias de rama (-git-dev-) y URLs por
 // despliegue (-mf6izhav7-). Limitado al scope del equipo omaradrianos-projects.
 var vercelOriginRe = regexp.MustCompile(`^https://cobranzas?webscrapper-front-[a-z0-9-]+-omaradrianos-projects\.vercel\.app$`)
 

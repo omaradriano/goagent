@@ -55,7 +55,7 @@ All variables are required (see `env/envconf.go`):
 | Variable | Purpose |
 |---|---|
 | `DB_URL` | PostgreSQL connection string |
-| `MODE` | `dev` or `prod` |
+| `MODE` | `dev` (local, sirve por http), `staging` o `prod` |
 | `JWT_SECRET` | JWT signing secret |
 | `SERVER_HOST`, `SERVER_PORT` | Bind address |
 | `WEBAPP_URL` | Frontend origin for CORS |

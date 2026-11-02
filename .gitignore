@@ -46,3 +46,4 @@ webscrapper_front/tasks.todo
 
 # Extension
 webscrapper_extension/dist/
+.vercel

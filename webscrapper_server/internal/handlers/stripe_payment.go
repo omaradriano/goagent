@@ -50,7 +50,8 @@ func CreateStripeCheckoutSession(w http.ResponseWriter, r *http.Request) {
 	priceID := env.Envs.StripePriceID
 
 	scheme := "https"
-	if env.Envs.Mode != "prod" {
+	// Solo local corre sin TLS; staging y prod se sirven por https.
+	if env.Envs.Mode == "dev" {
 		scheme = "http"
 	}
 
